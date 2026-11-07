@@ -305,6 +305,59 @@ jobs:
           # regression, a schema that silently lost tables is.
           test "$tables" -ge 46
 
+      # Issue #53's acceptance criterion, asserted on the real image: a fresh
+      # install with NO Clerk configuration must be usable out of the box. The
+      # .env above deliberately sets no HAAKU_AUTH_MODE, so this asserts the
+      # documented default (local) — if someone ever flips that default to clerk
+      # without a Clerk tenant, this is the step that says so.
+      - name: Assert first-run local auth works with no Clerk configuration
+        run: |
+          set -euo pipefail
+          api=http://127.0.0.1:18080/v1
+
+          cfg="$(curl -fsS "$api/auth/config")"
+          echo "auth config: $cfg"
+          test "$(echo "$cfg" | jq -r .mode)" = "local"
+          test "$(echo "$cfg" | jq -r .local_auth)" = "true"
+          test "$(echo "$cfg" | jq -r .first_run)" = "true"
+
+          # First run: the first account becomes the owner and gets a session.
+          signup="$(curl -fsS -X POST "$api/auth/local/signup" \
+            -H 'content-type: application/json' \
+            -d '{"email":"owner@smoke.test","password":"smoke-owner-password"}')"
+          echo "owner signup: $(echo "$signup" | jq -c '{status:.status,admin:.user.is_admin,session:(.session!=null)}')"
+          test "$(echo "$signup" | jq -r .user.is_admin)" = "true"
+          test "$(echo "$signup" | jq -r .status)" = "active"
+          token="$(echo "$signup" | jq -r '.session.token // ""')"
+          case "$token" in hs_*) ;; *) echo "::error::expected an hs_ session token, got '$token'"; exit 1;; esac
+
+          # Login works, and the session token it issues is accepted.
+          login="$(curl -fsS -X POST "$api/auth/local/login" \
+            -H 'content-type: application/json' \
+            -d '{"email":"owner@smoke.test","password":"smoke-owner-password"}')"
+          echo "owner login: $(echo "$login" | jq -c '{user:.user.id,has_session:(.session!=null)}')"
+          token="$(echo "$login" | jq -r .session.token)"
+
+          # The admin panel lists users for the owner.
+          users="$(curl -fsS "$api/admin/users" -H "authorization: Bearer $token")"
+          echo "admin users: $(echo "$users" | jq -c '{total:.total,first:.users[0].email}')"
+          test "$(echo "$users" | jq -r .total)" -ge 1
+          test "$(echo "$users" | jq -r '.users[0].email')" = "owner@smoke.test"
+
+          # And the approval default: a second account lands pending and cannot
+          # log in until an admin approves it — no open door on a reachable box.
+          second="$(curl -fsS -X POST "$api/auth/local/signup" \
+            -H 'content-type: application/json' \
+            -d '{"email":"pending@smoke.test","password":"smoke-pending-password"}')"
+          echo "second signup: $(echo "$second" | jq -c '{status:.status,session:.session}')"
+          test "$(echo "$second" | jq -r .status)" = "pending"
+          test "$(echo "$second" | jq -r .session)" = "null"
+          code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$api/auth/local/login" \
+            -H 'content-type: application/json' \
+            -d '{"email":"pending@smoke.test","password":"smoke-pending-password"}')"
+          echo "pending login: http $code"
+          test "$code" = "403"
+
       # The acceptance criterion is DATABASE_URL *and* REDIS_URL: with both set,
       # neither bundled service may start. Setting only one leaves the other
       # bundled, which is the point of the opt-out — and what this step asserts.
