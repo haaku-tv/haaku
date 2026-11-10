@@ -10,6 +10,29 @@ import (
 	projredis "github.com/haaku-tv/haaku/redis"
 )
 
+// hotListingCacheKey is the key the hot feed under test reads and writes:
+// serveHot builds `rankings:hot:<type>:page<N>:limit<N>`, and these tests drive
+// /v1/movies/hot?limit=2.
+const hotListingCacheKey = "rankings:hot:movie:page1:limit2"
+
+// clearHotListingCache makes the next request for hotListingCacheKey a real miss
+// and deletes the entry again on cleanup.
+//
+// It removes exactly that one key. Sweeping rankings:*, media:* and discovery:*
+// also evicted every OTHER listing's entry — state the test neither owns nor
+// created — which on a shared Redis silently discards another process's cache.
+func clearHotListingCache(t *testing.T) {
+	t.Helper()
+	client := projredis.GetClient()
+	if client == nil {
+		t.Fatal("redis client is nil after a successful InitRedis")
+	}
+	if err := client.Del(context.Background(), hotListingCacheKey).Err(); err != nil {
+		t.Fatalf("clear %s: %v", hotListingCacheKey, err)
+	}
+	t.Cleanup(func() { _ = client.Del(context.Background(), hotListingCacheKey).Err() })
+}
+
 // TestWarmCacheStillCarriesPaginationHeaders pins the defect this fixed: the
 // cache-hit path returned the stored body without replaying X-Pagination-*, so
 // the SAME request answered different headers depending on whether the Redis
@@ -28,23 +51,7 @@ func TestWarmCacheStillCarriesPaginationHeaders(t *testing.T) {
 	if err := projredis.InitRedis(); err != nil {
 		t.Fatalf("redis: %v", err)
 	}
-	client := projredis.GetClient()
-	if client == nil {
-		t.Fatal("redis client is nil after a successful InitRedis")
-	}
-
-	ctx := context.Background()
-	for _, pattern := range []string{"rankings:*", "media:*", "discovery:*"} {
-		keys, err := client.Keys(ctx, pattern).Result()
-		if err != nil {
-			t.Fatalf("keys %s: %v", pattern, err)
-		}
-		if len(keys) > 0 {
-			if err := client.Del(ctx, keys...).Err(); err != nil {
-				t.Fatalf("flush %s: %v", pattern, err)
-			}
-		}
-	}
+	clearHotListingCache(t)
 
 	db := setupRankingsDB(t)
 	seedMovieRankingData(t, db)
@@ -88,14 +95,7 @@ func TestEnvelopeWithoutABodyIsAMiss(t *testing.T) {
 	if err := projredis.InitRedis(); err != nil {
 		t.Fatalf("redis: %v", err)
 	}
-	client := projredis.GetClient()
-	if client == nil {
-		t.Fatal("redis client is nil after a successful InitRedis")
-	}
-	ctx := context.Background()
-	if keys, err := client.Keys(ctx, "rankings:*").Result(); err == nil && len(keys) > 0 {
-		_ = client.Del(ctx, keys...).Err()
-	}
+	clearHotListingCache(t)
 
 	db := setupRankingsDB(t)
 	seedMovieRankingData(t, db)
@@ -103,7 +103,7 @@ func TestEnvelopeWithoutABodyIsAMiss(t *testing.T) {
 
 	// A well-formed envelope with no body, under the key the handler will read.
 	bodyless := []byte(`{"page":1,"limit":2,"total":9,"items":9}`)
-	if err := projredis.SetCacheData("rankings:hot:movie:page1:limit2", bodyless, time.Minute); err != nil {
+	if err := projredis.SetCacheData(hotListingCacheKey, bodyless, time.Minute); err != nil {
 		t.Fatalf("prime cache: %v", err)
 	}
 
