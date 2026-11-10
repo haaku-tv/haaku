@@ -682,6 +682,14 @@ func apiKeyCacheKey(keyHash string) string { return apiKeyRedisPrefix + keyHash 
 // evictAPIKeyCache drops the cache entry for one key hash. It is fail-open: a
 // Redis error must not fail a revoke that has already removed the key from Clerk,
 // so the caller logs it and the entry expires with its TTL instead.
+//
+// "Fail-open" is bounded, though: a DEL that Redis REFUSES (an ACL that allows
+// GET and SET but not DEL, say) would leave the entry live, and a cache hit is
+// answered without consulting Clerk — so the revoked key would keep
+// authenticating for the rest of its TTL. When the delete fails, the entry is
+// overwritten with the empty sentinel instead, which LookupUserByAPIKey treats as
+// a miss, so the next use re-consults Clerk and finds nothing. Only if that fails
+// too does the TTL become the sole backstop.
 func evictAPIKeyCache(keyHash string) error {
 	rdb := tredis.GetClient()
 	if rdb == nil || keyHash == "" {
@@ -691,5 +699,11 @@ func evictAPIKeyCache(keyHash string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return rdb.Del(ctx, apiKeyCacheKey(keyHash)).Err()
+	cacheKey := apiKeyCacheKey(keyHash)
+	if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+		if setErr := rdb.Set(ctx, cacheKey, "", apiKeyCacheTTL).Err(); setErr != nil {
+			return err
+		}
+	}
+	return nil
 }

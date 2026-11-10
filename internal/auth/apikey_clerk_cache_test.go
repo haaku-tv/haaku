@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -337,4 +338,79 @@ func clientGet(t *testing.T, rdb *goredis.Client, key string) string {
 		return ""
 	}
 	return val
+}
+
+// TestARefusedEvictDoesNotLeaveTheKeyAuthenticating puts a bound on the
+// fail-open eviction.
+//
+// Redis can be configured (an ACL that permits GET and SET but not DEL) so that
+// the eviction's delete fails while the entry stays live — and a cache hit is
+// answered without any Clerk call, so "we tried to delete it and logged the
+// error" would leave a revoked credential authenticating for the rest of its
+// hour. The eviction overwrites the entry with the empty sentinel when the
+// delete fails, and LookupUserByAPIKey treats an empty value as a miss.
+//
+// The ACL is created per run and removed on cleanup. Without ACL support (or
+// without permission to create a user) the test skips.
+func TestARefusedEvictDoesNotLeaveTheKeyAuthenticating(t *testing.T) {
+	_, userA, _, keyA, _ := clerkFixtures(t)
+	admin := projredis.GetClient()
+	if admin == nil {
+		t.Fatal("no redis client installed")
+	}
+	ctx := context.Background()
+
+	// Warm the entry that the refused eviction will have to neutralise.
+	if got, err := LookupUserByAPIKey(keyA); err != nil || got != userA {
+		t.Fatalf("warm key A = (%q, %v), want (%q, nil)", got, err, userA)
+	}
+
+	user := "apikey-evict-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	pass := "pw-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	// Everything except DEL: the client still has to HELLO/SELECT its way in and
+	// write the sentinel, and the premise below proves the delete is refused.
+	if err := admin.Do(ctx, "ACL", "SETUSER", user, "on", ">"+pass, "~*", "+@all", "-del").Err(); err != nil {
+		t.Skipf("cannot create an ACL user on this Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Do(context.Background(), "ACL", "DELUSER", user).Err() })
+
+	restricted := redisClientAs(t, user, pass)
+	t.Cleanup(func() { _ = restricted.Close() })
+	if err := restricted.Ping(ctx).Err(); err != nil {
+		t.Skipf("the restricted Redis user cannot connect: %v", err)
+	}
+	// The premise: this connection can read and write the entry, but not delete it.
+	if err := restricted.Del(ctx, apiKeyCacheKey(hashAPIKey(keyA))).Err(); err == nil {
+		t.Fatal("the restricted user CAN delete — the test would prove nothing")
+	}
+	projredis.SetClientForTest(t, restricted)
+
+	if err := revokeClerkAPIKey(userA, "key-a"); err != nil {
+		t.Fatalf("revoke a key whose cache delete is refused: %v", err)
+	}
+
+	// The sentinel, not the stale user id, is what is left behind.
+	entry := clientGet(t, restricted, apiKeyCacheKey(hashAPIKey(keyA)))
+	if entry != "" {
+		t.Fatalf("cache entry after a refused eviction = %q, want the empty sentinel", entry)
+	}
+	// And the revoked key no longer authenticates: the sentinel reads as a miss,
+	// so the lookup re-consults Clerk, which no longer has the key.
+	if got, err := LookupUserByAPIKey(keyA); err == nil {
+		t.Fatalf("the revoked key still authenticated as %q — a refused DELETE left its entry live", got)
+	}
+}
+
+// redisClientAs opens a second connection to the same Redis as another user, on
+// the same database number the cache tests use.
+func redisClientAs(t *testing.T, user, pass string) *goredis.Client {
+	t.Helper()
+	opts, err := goredis.ParseURL(os.Getenv("REDIS_URL"))
+	if err != nil {
+		t.Skipf("unusable REDIS_URL: %v", err)
+	}
+	opts.DB = 15
+	opts.Username = user
+	opts.Password = pass
+	return goredis.NewClient(opts)
 }
