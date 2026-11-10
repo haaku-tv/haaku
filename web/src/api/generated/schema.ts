@@ -6174,7 +6174,7 @@ export interface paths {
         /** List user's API keys (masked) */
         get: operations["_v1_users_me_api_keys_GET"];
         put?: never;
-        /** Generate a new API key */
+        /** Generate a new API key (session credential only — an API key cannot mint another) */
         post: operations["_v1_users_me_api_keys_POST"];
         delete?: never;
         options?: never;
@@ -6192,7 +6192,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke an API key */
+        /** Revoke an API key (session credential only — an API key cannot revoke keys) */
         delete: operations["_v1_users_me_api_keys_key_id_DELETE"];
         options?: never;
         head?: never;
@@ -40432,6 +40432,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            /** @description API key callers may not manage keys */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             /** @description not found */
             404: {
                 headers: {
@@ -40506,6 +40515,15 @@ export interface operations {
             };
             /** @description unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description API key callers may not manage keys */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

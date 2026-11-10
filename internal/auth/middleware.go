@@ -59,6 +59,28 @@ func AttemptAuth(c *fiber.Ctx) (string, bool) {
 	return userID, true
 }
 
+// RequireSessionCredential rejects a request whose identity came from an API
+// key. It is for the surfaces that manage credentials themselves: an API key
+// that can mint another API key is a credential that outlives its own
+// revocation, and one that can revoke its siblings turns a leaked key into a
+// denial of service against the account that owns it. Both are a step of
+// privilege a bearer key should not have.
+//
+// It must run AFTER AuthRequired, which is what resolves and records the
+// auth_method it reads; on a route that already requires auth, that is always
+// the order. Read-only surfaces that merely display key metadata are not gated
+// by it — the caller is the account that owns the keys, so there is nothing to
+// escalate and nothing to leak.
+func RequireSessionCredential() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if method, _ := c.Locals(ctxAuthMethod).(string); method == "apikey" {
+			return writeError(c, fiber.StatusForbidden, "forbidden",
+				"an API key cannot manage API keys; sign in with a session")
+		}
+		return c.Next()
+	}
+}
+
 // OptionalAuth is a Fiber middleware that attempts auth but continues regardless.
 // Sets c.Locals("user_id") and c.Locals("auth_method") only if token is present and valid.
 func OptionalAuth() fiber.Handler {

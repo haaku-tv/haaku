@@ -64,9 +64,9 @@ func apiNotFound(c *fiber.Ctx, message string) error {
 
 func init() {
 	routes := []openapi.RouteDef{
-		{Method: "POST", Path: "/v1/users/me/api_keys", Summary: "Generate a new API key", Tags: []string{"API Keys"}, Auth: "required", StatusCodes: map[int]string{201: "API key created", 400: "Invalid request"}},
+		{Method: "POST", Path: "/v1/users/me/api_keys", Summary: "Generate a new API key (session credential only — an API key cannot mint another)", Tags: []string{"API Keys"}, Auth: "required", StatusCodes: map[int]string{201: "API key created", 400: "Invalid request", 403: "API key callers may not manage keys"}},
 		{Method: "GET", Path: "/v1/users/me/api_keys", Summary: "List user's API keys (masked)", Tags: []string{"API Keys"}, Auth: "required", StatusCodes: map[int]string{200: "List of API keys"}},
-		{Method: "DELETE", Path: "/v1/users/me/api_keys/{key_id}", Summary: "Revoke an API key", Tags: []string{"API Keys"}, Auth: "required", StatusCodes: map[int]string{200: "Key revoked", 404: "Key not found"}},
+		{Method: "DELETE", Path: "/v1/users/me/api_keys/{key_id}", Summary: "Revoke an API key (session credential only — an API key cannot revoke keys)", Tags: []string{"API Keys"}, Auth: "required", StatusCodes: map[int]string{200: "Key revoked", 403: "API key callers may not manage keys", 404: "Key not found"}},
 	}
 	for _, r := range routes {
 		openapi.Register(r)
@@ -88,9 +88,13 @@ func init() {
 // Settings → API keys logged the user out.
 func RegisterAPIKeyRoutes(api fiber.Router) {
 	me := api.Group("/users/me/api_keys")
-	me.Post("/", AuthRequired(), handleCreateAPIKey)
+	// AuthRequired first (it resolves the identity), then the credential-type
+	// gate: POST and DELETE change the credential set, so an API key may not
+	// call them. GET only displays metadata for the account that owns the keys,
+	// so it stays open to any authenticated credential.
+	me.Post("/", AuthRequired(), RequireSessionCredential(), handleCreateAPIKey)
 	me.Get("/", AuthRequired(), handleListAPIKeys)
-	me.Delete("/:key_id", AuthRequired(), handleRevokeAPIKey)
+	me.Delete("/:key_id", AuthRequired(), RequireSessionCredential(), handleRevokeAPIKey)
 }
 
 // ---------------------------------------------------------------------------

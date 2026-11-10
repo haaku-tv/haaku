@@ -256,6 +256,54 @@ func TestLocalAPIKeyEndToEnd(t *testing.T) {
 	}
 }
 
+// TestAPIKeyCannotManageAPIKeys is the credential-escalation guard: a `tk_` key
+// authenticates the caller, but it must not be able to mint another key (which
+// would outlive its own revocation) or revoke its siblings (a leaked key
+// becoming a denial of service against the account). A session credential is
+// what those two routes require.
+func TestAPIKeyCannotManageAPIKeys(t *testing.T) {
+	app, _, session := apiKeyTestApp(t)
+	keyID, rawKey := mintAPIKey(t, app, session, "jellyfin")
+
+	// Minting with the key: refused, and nothing new is created.
+	status, body := apiKeyCall(t, app, http.MethodPost, "/v1/users/me/api_keys", rawKey, `{"name":"spawned"}`)
+	if status != http.StatusForbidden {
+		t.Fatalf("POST with an API key: got %d, want 403 (%s)", status, body)
+	}
+	if !strings.Contains(body, "forbidden") {
+		t.Errorf("POST with an API key did not answer a forbidden envelope: %s", body)
+	}
+
+	// Revoking with the key: refused, and the key itself is still alive.
+	status, body = apiKeyCall(t, app, http.MethodDelete, "/v1/users/me/api_keys/"+keyID, rawKey, "")
+	if status != http.StatusForbidden {
+		t.Fatalf("DELETE with an API key: got %d, want 403 (%s)", status, body)
+	}
+
+	// The same key still works as a credential on the ordinary surface, and the
+	// read-only list stays open to it — only the mutations are gated.
+	status, body = apiKeyCall(t, app, http.MethodGet, "/v1/users/me", rawKey, "")
+	if status != http.StatusOK {
+		t.Fatalf("GET /v1/users/me with the key after two 403s: got %d (%s)", status, body)
+	}
+	status, body = apiKeyCall(t, app, http.MethodGet, "/v1/users/me/api_keys", rawKey, "")
+	if status != http.StatusOK {
+		t.Fatalf("GET api keys with the key: got %d, want 200 (%s)", status, body)
+	}
+	if !strings.Contains(body, keyID) || strings.Contains(body, rawKey) {
+		t.Fatalf("the list is not the expected masked row: %s", body)
+	}
+
+	// The session can still do both, so the gate is about the credential type
+	// and not a broken route.
+	if status, body := apiKeyCall(t, app, http.MethodPost, "/v1/users/me/api_keys", session, `{"name":"second"}`); status != http.StatusCreated {
+		t.Fatalf("POST with a session after the API-key refusal: got %d (%s)", status, body)
+	}
+	if status, body := apiKeyCall(t, app, http.MethodDelete, "/v1/users/me/api_keys/"+keyID, session, ""); status != http.StatusOK {
+		t.Fatalf("DELETE with a session after the API-key refusal: got %d (%s)", status, body)
+	}
+}
+
 // TestLocalAPIKeyRevokeIsScopedToTheOwner proves the DELETE cannot reach across
 // accounts: somebody else's key is a 404, and the key keeps working.
 func TestLocalAPIKeyRevokeIsScopedToTheOwner(t *testing.T) {
