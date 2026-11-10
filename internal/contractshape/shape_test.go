@@ -1,6 +1,9 @@
 package contractshape
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/haaku-tv/haaku/internal/database"
@@ -67,5 +70,110 @@ func TestUserNilIsMarkedDeleted(t *testing.T) {
 	ids := got["ids"].(map[string]any)
 	if _, ok := ids["trakt"].(int64); !ok {
 		t.Fatalf("ids.trakt = %#v, want an integer even for a deleted user", ids["trakt"])
+	}
+}
+
+// mediaImageKeySet is the contract's required image keys, copied from
+// docs/parity/upstream/trakt-openapi.json. It is duplicated here on purpose: a
+// test that reads the map it is testing proves nothing.
+var mediaImageKeySet = map[string][]string{
+	"movie":   {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"show":    {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"season":  {"poster", "thumb"},
+	"episode": {"screenshot"},
+	"person":  {"headshot", "fanart"},
+}
+
+// TestMediaImagesCarryEveryRequiredKey is the #140 acceptance test: every media
+// type's images object carries its full required key set, as arrays, even for a
+// row that holds no images at all. A missing key is a conformance failure
+// (`images.logo: missing required field` was the first diff on 44 operations),
+// and a null would be rejected by the contract's ["array"] item type just as
+// hard — so the assertions are on the key set and the JSON type, not the values.
+func TestMediaImagesCarryEveryRequiredKey(t *testing.T) {
+	cases := []struct {
+		name   string
+		kind   string
+		stored database.JSONMap
+		// expect maps a key to the URLs it must resolve to, for the rows that
+		// hold data under a provider's own key name.
+		expect map[string][]string
+	}{
+		{name: "movie with nothing stored", kind: "movie"},
+		{name: "show with nothing stored", kind: "show"},
+		{name: "season with nothing stored", kind: "season"},
+		{name: "episode with nothing stored", kind: "episode"},
+		{name: "person with nothing stored", kind: "person"},
+		{
+			name:   "movie resolves poster and maps backdrop onto fanart",
+			kind:   "movie",
+			stored: database.JSONMap{"poster": "https://example.test/p.jpg", "backdrop": "https://example.test/b.jpg"},
+			expect: map[string][]string{
+				"poster": {"https://example.test/p.jpg"},
+				"fanart": {"https://example.test/b.jpg"},
+			},
+		},
+		{
+			name:   "show resolves a bare TMDB path and a tvdb poster",
+			kind:   "show",
+			stored: database.JSONMap{"poster_path": "/abc.jpg"},
+			expect: map[string][]string{"poster": {"https://image.tmdb.org/t/p/w500/abc.jpg"}},
+		},
+		{
+			name:   "episode maps its still onto screenshot",
+			kind:   "episode",
+			stored: database.JSONMap{"still": "https://example.test/s.jpg"},
+			expect: map[string][]string{"screenshot": {"https://example.test/s.jpg"}},
+		},
+		{
+			name:   "person maps a raw profile path onto headshot",
+			kind:   "person",
+			stored: database.JSONMap{"profile_path": "/who.jpg"},
+			expect: map[string][]string{"headshot": {"https://image.tmdb.org/t/p/w500/who.jpg"}},
+		},
+		{
+			name:   "a stored array round-tripped through JSONB is preserved",
+			kind:   "movie",
+			stored: database.JSONMap{"poster": []any{"https://example.test/1.jpg", "https://example.test/2.jpg"}},
+			expect: map[string][]string{"poster": {"https://example.test/1.jpg", "https://example.test/2.jpg"}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MediaImages(tc.kind, tc.stored)
+
+			want := mediaImageKeySet[tc.kind]
+			if len(got) != len(want) {
+				t.Errorf("%s images has %d keys, want exactly %d: %v", tc.kind, len(got), len(want), got)
+			}
+			for _, key := range want {
+				raw, ok := got[key]
+				if !ok {
+					t.Errorf("%s images.%s missing — the contract requires it", tc.kind, key)
+					continue
+				}
+				// Must be a real array, never nil (null) and never a bare string.
+				values, ok := raw.([]string)
+				if !ok {
+					t.Errorf("%s images.%s is %T, want []string (the contract's item type is an array)", tc.kind, key, raw)
+					continue
+				}
+				if wantURLs, checked := tc.expect[key]; checked {
+					if !reflect.DeepEqual(values, wantURLs) {
+						t.Errorf("%s images.%s = %v, want %v", tc.kind, key, values, wantURLs)
+					}
+				}
+			}
+
+			// And the whole thing must survive JSON as arrays, not nulls.
+			encoded, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if strings.Contains(string(encoded), "null") {
+				t.Errorf("images marshalled with a null value: %s", encoded)
+			}
+		})
 	}
 }

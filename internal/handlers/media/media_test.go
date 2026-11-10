@@ -178,7 +178,11 @@ func TestBuildSeasonAndEpisodeResponse(t *testing.T) {
 
 // TestMovieResponseMarshalJSONNeverNilMaps guards the "maps are never nil"
 // contract on the wire: a MovieResponse with nil Images/Genres must still
-// serialize Images as {} and Genres as [] (regression for empty responses).
+// serialize a complete images object and omit Genres rather than emit null.
+//
+// images must carry the contract's FULL required key set, not {} — the contract
+// types the object as a closed set whose keys are all required, so an empty
+// object is the `images.logo: missing required field` diff (#140).
 func TestMovieResponseMarshalJSONNeverNilMaps(t *testing.T) {
 	resp := MovieResponse{Title: "x"} // Images and Genres intentionally nil
 	data, err := json.Marshal(resp)
@@ -189,8 +193,22 @@ func TestMovieResponseMarshalJSONNeverNilMaps(t *testing.T) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if string(m["images"]) != "{}" {
-		t.Errorf(`images = %s, want {}`, m["images"])
+	var images map[string]json.RawMessage
+	if err := json.Unmarshal(m["images"], &images); err != nil {
+		t.Fatalf("images is not an object: %s (%v)", m["images"], err)
+	}
+	for _, key := range []string{"fanart", "poster", "logo", "clearart", "banner", "thumb"} {
+		raw, ok := images[key]
+		if !ok {
+			t.Errorf("images.%s missing — the contract requires it", key)
+			continue
+		}
+		if string(raw) != "[]" {
+			t.Errorf(`images.%s = %s, want []`, key, raw)
+		}
+	}
+	if len(images) != 6 {
+		t.Errorf("images has %d keys, want exactly the contract's 6: %s", len(images), m["images"])
 	}
 	// Genres carries omitempty: an empty (or nil) slice is dropped entirely,
 	// never serialized as null.

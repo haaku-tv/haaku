@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/haaku-tv/haaku/internal/contractshape"
 	"github.com/haaku-tv/haaku/internal/database"
 
 	"github.com/gofiber/fiber/v2"
@@ -285,7 +286,7 @@ func buildMovieResponse(lookup map[mediaRef][]database.ExternalID, m *database.M
 		IDs:           buildIDsFromLookup(lookup, "movie", m.ID, m, nil),
 		Title:         m.Title,
 		Year:          year,
-		Images:        m.Images,
+		Images:        contractshape.MediaImages("movie", m.Images),
 		RatingSummary: buildRatingSummary(m.RatingAvg, m.RatingCount),
 	}
 
@@ -338,7 +339,7 @@ func buildShowResponse(lookup map[mediaRef][]database.ExternalID, s *database.Sh
 		IDs:           buildIDsFromLookup(lookup, "show", s.ID, nil, s),
 		Title:         s.Title,
 		Year:          year,
-		Images:        s.Images,
+		Images:        contractshape.MediaImages("show", s.Images),
 		RatingSummary: buildRatingSummary(s.RatingAvg, s.RatingCount),
 	}
 
@@ -397,13 +398,12 @@ func buildSeasonResponse(lookup map[mediaRef][]database.ExternalID, s *database.
 		ShowID:       s.ShowID,
 		SeasonNumber: s.SeasonNumber,
 		EpisodeCount: s.EpisodeCount,
-		Images:       s.Images,
+		// The contract's season images object requires poster and thumb, so the
+		// full key set is emitted even when the row holds neither.
+		Images: contractshape.MediaImages("season", s.Images),
 	}
 	if s.AiredAt != nil {
 		resp.AiredAt = s.AiredAt.String()
-	}
-	if len(s.Images) == 0 {
-		resp.Images = make(map[string]any)
 	}
 	return resp
 }
@@ -422,14 +422,11 @@ func buildEpisodeResponse(lookup map[mediaRef][]database.ExternalID, e *database
 		Title:          e.Title,
 		Overview:       e.Overview,
 		Runtime:        e.Runtime,
-		Images:         e.Images,
+		Images:         contractshape.MediaImages("episode", e.Images),
 		AbsoluteNumber: e.AbsoluteNumber,
 	}
 	if e.AiredAt != nil {
 		resp.AiredAt = e.AiredAt.String()
-	}
-	if resp.Images == nil {
-		resp.Images = make(map[string]any)
 	}
 	return resp
 }
@@ -455,16 +452,13 @@ func buildPersonResponse(lookup map[mediaRef][]database.ExternalID, p *database.
 		Biography:          p.Biography,
 		Gender:             p.Gender,
 		KnownForDepartment: p.KnownForDepartment,
-		Images:             p.Images,
+		Images:             contractshape.MediaImages("person", p.Images),
 	}
 	if p.Birthday != nil {
 		resp.Birthday = p.Birthday.String()
 	}
 	if p.Deathday != nil {
 		resp.Deathday = p.Deathday.String()
-	}
-	if resp.Images == nil {
-		resp.Images = make(map[string]any)
 	}
 	return resp
 }
@@ -493,7 +487,7 @@ func (r MovieResponse) MarshalJSON() ([]byte, error) {
 	type Alias MovieResponse
 	a := Alias(r)
 	if a.Images == nil {
-		a.Images = make(map[string]any)
+		a.Images = contractshape.MediaImages("movie", nil)
 	}
 	if a.Genres == nil {
 		a.Genres = make([]string, 0)
@@ -506,7 +500,7 @@ func (r ShowResponse) MarshalJSON() ([]byte, error) {
 	type Alias ShowResponse
 	a := Alias(r)
 	if a.Images == nil {
-		a.Images = make(map[string]any)
+		a.Images = contractshape.MediaImages("show", nil)
 	}
 	if a.Genres == nil {
 		a.Genres = make([]string, 0)
@@ -522,7 +516,7 @@ func (r PersonResponse) MarshalJSON() ([]byte, error) {
 	type Alias PersonResponse
 	a := Alias(r)
 	if a.Images == nil {
-		a.Images = make(map[string]any)
+		a.Images = contractshape.MediaImages("person", nil)
 	}
 	return json.Marshal(a)
 }
