@@ -73,9 +73,8 @@ func serveMediaList(c *fiber.Ctx, kind string) error {
 	page, limit := response.ParsePagination(c, 25)
 
 	cacheKey := fmt.Sprintf("media:%s:page%d:limit%d", kind, page, limit)
-	if data, ok := discoveryGetCache(cacheKey); ok {
-		c.Set("Content-Type", "application/json")
-		return c.Send(data)
+	if discoveryGetListing(c, cacheKey) {
+		return nil
 	}
 
 	db, dbErr := database.GetDB()
@@ -96,7 +95,7 @@ func serveMediaList(c *fiber.Ctx, kind string) error {
 	if offset >= total {
 		out := make([]map[string]any, 0)
 		response.SetPaginationHeaders(c, page, limit, total, 0)
-		discoverySetCache(cacheKey, out)
+		discoverySetListing(cacheKey, page, limit, total, 0, out)
 		return c.JSON(out)
 	}
 
@@ -212,7 +211,7 @@ func serveMediaList(c *fiber.Ctx, kind string) error {
 	}
 
 	response.SetPaginationHeaders(c, page, limit, total, len(out))
-	discoverySetCache(cacheKey, out)
+	discoverySetListing(cacheKey, page, limit, total, len(out), out)
 	return c.JSON(out)
 }
 

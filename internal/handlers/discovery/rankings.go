@@ -180,9 +180,8 @@ func serveMovieRanking(c *fiber.Ctx, kind string) error {
 	page, limit := response.ParsePagination(c, 25)
 
 	cacheKey := fmt.Sprintf("rankings:movies:%s:%s:page%d:limit%d", kind, period, page, limit)
-	if data, ok := discoveryGetCache(cacheKey); ok {
-		c.Set("Content-Type", "application/json")
-		return c.Send(data)
+	if discoveryGetListing(c, cacheKey) {
+		return nil
 	}
 
 	db, dbErr := database.GetDB()
@@ -227,7 +226,7 @@ func serveMovieRanking(c *fiber.Ctx, kind string) error {
 	}
 
 	response.SetPaginationHeaders(c, page, limit, int64(len(rows)), len(out))
-	discoverySetCache(cacheKey, out)
+	discoverySetListing(cacheKey, page, limit, int64(len(rows)), len(out), out)
 	return c.JSON(out)
 }
 
@@ -240,9 +239,8 @@ func serveShowRanking(c *fiber.Ctx, kind string) error {
 	page, limit := response.ParsePagination(c, 25)
 
 	cacheKey := fmt.Sprintf("rankings:shows:%s:%s:page%d:limit%d", kind, period, page, limit)
-	if data, ok := discoveryGetCache(cacheKey); ok {
-		c.Set("Content-Type", "application/json")
-		return c.Send(data)
+	if discoveryGetListing(c, cacheKey) {
+		return nil
 	}
 
 	db, dbErr := database.GetDB()
@@ -288,7 +286,7 @@ func serveShowRanking(c *fiber.Ctx, kind string) error {
 	}
 
 	response.SetPaginationHeaders(c, page, limit, int64(len(rows)), len(out))
-	discoverySetCache(cacheKey, out)
+	discoverySetListing(cacheKey, page, limit, int64(len(rows)), len(out), out)
 	return c.JSON(out)
 }
 
@@ -451,9 +449,8 @@ func serveHot(c *fiber.Ctx, mediaType string) error {
 	page, limit := response.ParsePagination(c, 25)
 
 	cacheKey := fmt.Sprintf("rankings:hot:%s:page%d:limit%d", mediaType, page, limit)
-	if data, ok := discoveryGetCache(cacheKey); ok {
-		c.Set("Content-Type", "application/json")
-		return c.Send(data)
+	if discoveryGetListing(c, cacheKey) {
+		return nil
 	}
 
 	db, dbErr := database.GetDB()
@@ -554,7 +551,7 @@ func serveHot(c *fiber.Ctx, mediaType string) error {
 	}
 
 	response.SetPaginationHeaders(c, page, limit, int64(len(candidates)), len(out))
-	discoverySetCache(cacheKey, out)
+	discoverySetListing(cacheKey, page, limit, int64(len(candidates)), len(out), out)
 	return c.JSON(out)
 }
 
