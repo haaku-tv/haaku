@@ -126,9 +126,9 @@ type listAPIKeyResponse struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Prefix string `json:"prefix"`
-	// MaskedKey is the same value as Prefix in the shape the settings page
-	// reads for display. The raw key is never part of a list response — it
-	// exists only in the create response.
+	// MaskedKey is Prefix with a trailing ellipsis appended (see maskKey) — the
+	// field the settings page reads for display. The raw key is never part of a
+	// list response; it exists only in the create response.
 	MaskedKey string `json:"masked_key"`
 	CreatedAt string `json:"created_at"`
 	LastUsed  string `json:"last_used,omitempty"`
