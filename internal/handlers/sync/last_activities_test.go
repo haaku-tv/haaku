@@ -175,8 +175,9 @@ func TestLastActivitiesSeededSections(t *testing.T) {
 	must(db.Create(&database.UserPlayback{UserID: u, MediaType: "movie", MediaID: 1, PausedAt: ts(6)}).Error)
 	must(db.Create(&database.UserHidden{UserID: u, Section: "progress", MediaType: "movie", MediaID: 1, HiddenAt: ts(7)}).Error)
 
-	// episodes: rated only (no episode history/collection/watchlist/playback)
+	// episodes: rated + collected (no episode history/watchlist/playback)
 	must(db.Create(&database.UserRating{UserID: u, MediaType: "episode", MediaID: 2, Rating: 7, RatedAt: ts(8), CreatedAt: ts(8), UpdatedAt: ts(8)}).Error)
+	must(db.Create(&database.UserCollection{UserID: u, MediaType: "episode", MediaID: 2, CollectedAt: ts(8), CreatedAt: ts(8)}).Error)
 
 	// shows: rated + watchlisted
 	must(db.Create(&database.UserRating{UserID: u, MediaType: "show", MediaID: 3, Rating: 9, RatedAt: ts(9), CreatedAt: ts(9), UpdatedAt: ts(9)}).Error)
@@ -249,8 +250,8 @@ func TestLastActivitiesSeededSections(t *testing.T) {
 	} else {
 		isNil("episodes.watched_at", got.Episodes.WatchedAt)
 		eq("episodes.rated_at", got.Episodes.RatedAt, st(8))
+		eq("episodes.collected_at", got.Episodes.CollectedAt, st(8))
 		// Explicitly unsupported: null, not invented.
-		isNil("episodes.collected_at", got.Episodes.CollectedAt)
 		isNil("episodes.watchlisted_at", got.Episodes.WatchlistedAt)
 	}
 
@@ -272,7 +273,7 @@ func TestLastActivitiesSeededSections(t *testing.T) {
 	eq("ratings.updated_at", got.Ratings.UpdatedAt, st(11))     // latest rating row updated_at
 	eq("watchlist.updated_at", got.Watchlist.UpdatedAt, st(10)) // latest watchlist row created_at
 	eq("favorites.updated_at", got.Favorites.UpdatedAt, st(5))
-	eq("collection.updated_at", got.Collection.UpdatedAt, st(2))
+	eq("collection.updated_at", got.Collection.UpdatedAt, st(8)) // newest collection row is the episode
 	eq("history.updated_at", got.History.UpdatedAt, st(1))
 	eq("comments.liked_at", got.Comments.LikedAt, st(15))
 	eq("notes.updated_at", got.Notes.UpdatedAt, st(20))
@@ -315,5 +316,35 @@ func TestLastActivitiesScopesToCaller(t *testing.T) {
 	}
 	if got.All != nil {
 		t.Errorf("all must be null for a caller with no rows, got %s", *got.All)
+	}
+}
+
+// TestLastActivitiesEpisodeCollectionWithoutHistory is the case the episode
+// collection writes create: a collection row with no episode history or rating.
+// episodeOrNil used to ignore CollectedAt and report the whole section as null.
+func TestLastActivitiesEpisodeCollectionWithoutHistory(t *testing.T) {
+	db := setupLastActivitiesDB(t)
+	u := lastActivitiesTestUser
+	at := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
+	if err := db.Create(&database.UserCollection{
+		UserID: u, MediaType: "episode", MediaID: 7, CollectedAt: at, CreatedAt: at,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	app := newLastActivitiesApp(u)
+	status, raw := doGET(t, app, "/v1/sync/last_activities")
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", status, raw)
+	}
+	var got LastActivitiesResponse
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Episodes == nil {
+		t.Fatalf("episodes = null, want the collected episode represented: %s", raw)
+	}
+	if got.Episodes.CollectedAt == nil {
+		t.Errorf("episodes.collected_at = null, want the collection timestamp")
 	}
 }

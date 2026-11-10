@@ -51,31 +51,32 @@ type Movie struct {
 // (the movie one does not carry it — measured against the live API), which is
 // what makes the TMDB→TVDB supplementary link one call instead of a search.
 type Show struct {
-	ID                  int             `json:"id"`
-	IMDBID              string          `json:"imdb_id"`
-	Name                string          `json:"name"`
-	OriginalName        string          `json:"original_name"`
-	Tagline             string          `json:"tagline"`
-	Overview            string          `json:"overview"`
-	FirstAirDate        string          `json:"first_air_date"`
-	LastAirDate         string          `json:"last_air_date"`
-	Status              string          `json:"status"`
-	Popularity          float64         `json:"popularity"`
-	VoteAverage         float64         `json:"vote_average"`
-	VoteCount           int64           `json:"vote_count"`
-	Genres              []Genre         `json:"genres"`
-	Language            string          `json:"original_language"`
-	PosterPath          string          `json:"poster_path"`
-	BackdropPath        string          `json:"backdrop_path"`
-	Networks            []Network       `json:"networks"`
-	SeasonsCount        int             `json:"number_of_seasons"`
-	EpisodesCount       int             `json:"number_of_episodes"`
-	Seasons             []SeasonSummary `json:"seasons"`
-	Adult               bool            `json:"adult"`
-	ProductionCountries []Country       `json:"production_countries"`
-	ExternalIDs         *ExternalIDs    `json:"external_ids,omitempty"`
-	ContentRatings      *ContentRatings `json:"content_ratings,omitempty"`
-	Videos              *Videos         `json:"videos,omitempty"`
+	ID                  int                 `json:"id"`
+	IMDBID              string              `json:"imdb_id"`
+	Name                string              `json:"name"`
+	OriginalName        string              `json:"original_name"`
+	Tagline             string              `json:"tagline"`
+	Overview            string              `json:"overview"`
+	FirstAirDate        string              `json:"first_air_date"`
+	LastAirDate         string              `json:"last_air_date"`
+	Status              string              `json:"status"`
+	Popularity          float64             `json:"popularity"`
+	VoteAverage         float64             `json:"vote_average"`
+	VoteCount           int64               `json:"vote_count"`
+	Genres              []Genre             `json:"genres"`
+	Language            string              `json:"original_language"`
+	PosterPath          string              `json:"poster_path"`
+	BackdropPath        string              `json:"backdrop_path"`
+	Networks            []Network           `json:"networks"`
+	SeasonsCount        int                 `json:"number_of_seasons"`
+	EpisodesCount       int                 `json:"number_of_episodes"`
+	Seasons             []SeasonSummary     `json:"seasons"`
+	Adult               bool                `json:"adult"`
+	ProductionCountries []Country           `json:"production_countries"`
+	ProductionCompanies []ProductionCompany `json:"production_companies"`
+	ExternalIDs         *ExternalIDs        `json:"external_ids,omitempty"`
+	ContentRatings      *ContentRatings     `json:"content_ratings,omitempty"`
+	Videos              *Videos             `json:"videos,omitempty"`
 }
 
 // SeasonSummary is the lightweight season info from the show detail.
@@ -99,21 +100,28 @@ type Season struct {
 	VoteAverage  float64         `json:"vote_average"`
 	VoteCount    int64           `json:"vote_count"`
 	Episodes     []EpisodeDetail `json:"episodes"`
+	// Videos and Credits are appended when a read asks for them (issue #68).
+	Videos  *Videos          `json:"videos,omitempty"`
+	Credits *CreditsResponse `json:"credits,omitempty"`
 }
 
 // EpisodeDetail is a single episode from the season detail response.
 type EpisodeDetail struct {
-	ID            int     `json:"id"`
-	EpisodeNumber int     `json:"episode_number"`
-	Name          string  `json:"name"`
-	Overview      string  `json:"overview"`
-	AirDate       string  `json:"air_date"`
-	Runtime       int     `json:"runtime"`
-	StillPath     string  `json:"still_path"`
-	VoteAverage   float64 `json:"vote_average"`
-	VoteCount     int64   `json:"vote_count"`
-	SeasonNumber  int     `json:"season_number"`
-	ShowID        int     // injected from context
+	ID            int              `json:"id"`
+	EpisodeNumber int              `json:"episode_number"`
+	Name          string           `json:"name"`
+	Overview      string           `json:"overview"`
+	AirDate       string           `json:"air_date"`
+	Runtime       int              `json:"runtime"`
+	StillPath     string           `json:"still_path"`
+	VoteAverage   float64          `json:"vote_average"`
+	VoteCount     int64            `json:"vote_count"`
+	SeasonNumber  int              `json:"season_number"`
+	ShowID        int              // injected from context
+	GuestStars    []CastMember     `json:"guest_stars,omitempty"`
+	Crew          []CrewMember     `json:"crew,omitempty"`
+	Videos        *Videos          `json:"videos,omitempty"`
+	Credits       *CreditsResponse `json:"credits,omitempty"`
 }
 
 // Person represents a TMDB person detail response.
@@ -164,6 +172,13 @@ type Company struct {
 	OriginCountry string `json:"origin_country"`
 	LogoPath      string `json:"logo_path"`
 }
+
+// ProductionCompany and TranslationsResponse are the names the PR's metadata
+// layer uses for these two TMDB shapes. main introduced Company and
+// Translations for the same JSON; keep both spellings as aliases so neither
+// layer has to rename.
+type ProductionCompany = Company
+type TranslationsResponse = Translations
 
 // Translations is TMDB's translations payload, shared by movies, shows and
 // episodes. Each entry carries the per-language text under `data`.
@@ -344,9 +359,10 @@ type TrendingItem struct {
 
 // CreditsResponse holds cast and crew for a movie or TV show.
 type CreditsResponse struct {
-	ID   int          `json:"id"`
-	Cast []CastMember `json:"cast"`
-	Crew []CrewMember `json:"crew"`
+	ID         int          `json:"id"`
+	Cast       []CastMember `json:"cast"`
+	GuestStars []CastMember `json:"guest_stars"`
+	Crew       []CrewMember `json:"crew"`
 }
 
 // CastMember represents an actor/actress credit.
@@ -430,6 +446,25 @@ type Certification struct {
 	Order         int    `json:"order"`
 }
 
+// WatchProvidersCatalogue is TMDB's watch-provider catalogue for one media
+// type (GET /watch/providers/{movie,tv}). Unlike the per-title watch/providers
+// payload, every entry carries its display priority in EVERY country TMDB
+// knows it in, which is what lets one request fill the country-filtered
+// /watchnow/sources catalogue.
+type WatchProvidersCatalogue struct {
+	Results []WatchProviderCatalogueEntry `json:"results"`
+}
+
+// WatchProviderCatalogueEntry is one provider in the catalogue. DisplayPriorities
+// is keyed by upper-case ISO 3166-1 country code.
+type WatchProviderCatalogueEntry struct {
+	DisplayPriorities map[string]int `json:"display_priorities"`
+	DisplayPriority   int            `json:"display_priority"`
+	LogoPath          string         `json:"logo_path"`
+	ProviderName      string         `json:"provider_name"`
+	ProviderID        int            `json:"provider_id"`
+}
+
 // --- Appended sub-resources (append_to_response) ---
 
 // appendParams is the append_to_response list GetMovie/GetShow ask for. One
@@ -439,6 +474,9 @@ type Certification struct {
 const (
 	appendMovie = "external_ids,release_dates,videos"
 	appendShow  = "external_ids,content_ratings,videos"
+	// Season and episode reads append their own videos and credits (issue #68).
+	appendSeason  = "videos,credits"
+	appendEpisode = "videos,credits"
 )
 
 // ExternalIDs is TMDB's external_ids payload.

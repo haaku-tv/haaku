@@ -166,6 +166,47 @@ func (c *Client) GetSeason(showID, seasonNum int) (*Season, error) {
 	return s, nil
 }
 
+// GetSeasonExtras is GetSeason plus the two appended sub-resources the Trakt
+// season surface needs (issue #68): the season's videos and its aggregate
+// cast/crew. It is a separate method because the structural season walk during
+// a show ingest must stay cheap; only a read that needs videos or people pays
+// for them.
+func (c *Client) GetSeasonExtras(showID, seasonNum int) (*Season, error) {
+	resp, err := c.do("GET", fmt.Sprintf("/tv/%d/season/%d", showID, seasonNum),
+		url.Values{"append_to_response": {appendSeason}})
+	if err != nil {
+		return nil, err
+	}
+	s, err := decode[Season](resp)
+	if err != nil {
+		return nil, err
+	}
+	for i := range s.Episodes {
+		s.Episodes[i].ShowID = showID
+	}
+	return s, nil
+}
+
+// GetEpisodeExtras fetches one episode with its videos and credits appended.
+// TMDB has no all-episodes video endpoint, so an episode's videos cost this one
+// request; the season payload carries the same episode's guest_stars and crew,
+// but not its videos.
+func (c *Client) GetEpisodeExtras(showID, seasonNum, episodeNum int) (*EpisodeDetail, error) {
+	resp, err := c.do("GET",
+		fmt.Sprintf("/tv/%d/season/%d/episode/%d", showID, seasonNum, episodeNum),
+		url.Values{"append_to_response": {appendEpisode}})
+	if err != nil {
+		return nil, err
+	}
+	ep, err := decode[EpisodeDetail](resp)
+	if err != nil {
+		return nil, err
+	}
+	ep.ShowID = showID
+	ep.SeasonNumber = seasonNum
+	return ep, nil
+}
+
 func (c *Client) GetPerson(id int) (*Person, error) {
 	resp, err := c.do("GET", fmt.Sprintf("/person/%d", id), nil)
 	if err != nil {
@@ -330,7 +371,51 @@ func (c *Client) GetShowCredits(id int) (*CreditsResponse, error) {
 	return decode[CreditsResponse](resp)
 }
 
+// GetWatchProviderCatalogue returns TMDB's provider catalogue for one media
+// type: "movie" or "tv". It deliberately does NOT pass watch_region, because
+// the unfiltered payload carries each provider's per-country display
+// priorities — the country availability the /watchnow/sources routes serve.
+func (c *Client) GetWatchProviderCatalogue(mediaType string) (*WatchProvidersCatalogue, error) {
+	resp, err := c.doV3("GET", "/watch/providers/"+mediaType, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decode[WatchProvidersCatalogue](resp)
+}
+
 // GetMovieWatchProviders returns streaming/rent/buy availability for a movie (v3).
+// GetMovieTranslations returns every translation TMDB carries for a movie.
+func (c *Client) GetMovieTranslations(movieID int) (*TranslationsResponse, error) {
+	resp, err := c.do("GET", fmt.Sprintf("/movie/%d/translations", movieID), nil)
+	if err != nil {
+		return nil, err
+	}
+	return decode[TranslationsResponse](resp)
+}
+
+// GetEpisodeTranslations returns every translation TMDB carries for one
+// episode. TMDB has no season-level translation-all call shape we need here;
+// the season path is translated episode-by-episode.
+func (c *Client) GetEpisodeTranslations(showID, seasonNum, episodeNum int) (*TranslationsResponse, error) {
+	resp, err := c.do("GET",
+		fmt.Sprintf("/tv/%d/season/%d/episode/%d/translations", showID, seasonNum, episodeNum), nil)
+	if err != nil {
+		return nil, err
+	}
+	return decode[TranslationsResponse](resp)
+}
+
+// GetEpisodeWatchProviders returns the per-country watch providers TMDB
+// carries for one episode.
+func (c *Client) GetEpisodeWatchProviders(showID, seasonNum, episodeNum int) (*WatchProvidersResponse, error) {
+	resp, err := c.do("GET",
+		fmt.Sprintf("/tv/%d/season/%d/episode/%d/watch/providers", showID, seasonNum, episodeNum), nil)
+	if err != nil {
+		return nil, err
+	}
+	return decode[WatchProvidersResponse](resp)
+}
+
 func (c *Client) GetMovieWatchProviders(movieID int) (*WatchProvidersResponse, error) {
 	resp, err := c.doV3("GET", fmt.Sprintf("/movie/%d/watch/providers", movieID), nil)
 	if err != nil {

@@ -33,6 +33,7 @@ import (
 	"github.com/haaku-tv/haaku/internal/handlers/updates"
 	"github.com/haaku-tv/haaku/internal/handlers/users"
 	"github.com/haaku-tv/haaku/internal/handlers/watch"
+	"github.com/haaku-tv/haaku/internal/handlers/watchnow"
 	"github.com/haaku-tv/haaku/internal/handlers/webhooks"
 	"github.com/haaku-tv/haaku/internal/oauth"
 	"github.com/haaku-tv/haaku/internal/openapi"
@@ -167,8 +168,15 @@ func RegisterRoutes(app *fiber.App) {
 		},
 	})
 
+	// Recent-search persistence and the exact-title contract route (issue #70).
+	api.Post("/search/recent", auth.AuthRequired(), handlePostRecentSearch)
+	api.Get("/search/recent_by_id/global/:type", handleRecentSearchesByID)
+
 	// Contract-shaped search paths (static /search/exact and /search/lookup
 	// are registered above, so the parameterised routes cannot swallow them).
+	// The exact route must precede the two-segment id lookup: both three-segment
+	// forms would otherwise match "/search/movie/exact" as an id lookup.
+	api.Get("/search/:type/exact", handleContractSearchExact)
 	api.Get("/search/:type", handleContractSearchType)
 	api.Get("/search/:id_type/:id", handleContractSearchLookup)
 
@@ -209,8 +217,14 @@ func RegisterRoutes(app *fiber.App) {
 	watch.RegisterRoutes(api)
 
 	// Contract-shaped per-item metadata (issue #68): videos, releases,
-	// translations, studios, season info, watching and reports.
+	// translations, studios, season info, watching and reports. Registered
+	// BEFORE seasons/episodes below: those packages also mount
+	// /shows/:id/seasons/:season/info, and Fiber matches in registration order,
+	// so this provider-backed handler has to win (main's order, kept).
 	tmdbmeta.RegisterRoutes(api)
+
+	// Watch-now provider catalogue (issue #69).
+	watchnow.RegisterRoutes(api)
 
 	// Calendars (Phase 1: T1.8)
 	calendar.RegisterRoutes(api)

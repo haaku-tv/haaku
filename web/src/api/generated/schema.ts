@@ -310,15 +310,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/calendars/{target}/dvd/{start_date}/{days}": {
+    "/v1/calendars/all/dvd/{start_date}/{days}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
-        get: operations["_v1_calendars_target_dvd_start_date_days_GET"];
+        /** DVD/physical release calendar (contract path) */
+        get: operations["_v1_calendars_all_dvd_start_date_days_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -327,15 +327,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/calendars/{target}/streaming/{start_date}/{days}": {
+    "/v1/calendars/all/media/{start_date}/{days}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
-        get: operations["_v1_calendars_target_streaming_start_date_days_GET"];
+        /** Movies and episodes releasing in a date range (contract path) */
+        get: operations["_v1_calendars_all_media_start_date_days_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -378,6 +378,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/calendars/all/shows/finales/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the finales feed (contract path) */
+        get: operations["_v1_calendars_all_shows_finales_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/all/shows/new/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the new feed (contract path) */
+        get: operations["_v1_calendars_all_shows_new_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/all/shows/premieres/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the premieres feed (contract path) */
+        get: operations["_v1_calendars_all_shows_premieres_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/all/streaming/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Streaming release calendar (contract path) */
+        get: operations["_v1_calendars_all_streaming_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/calendars/favorites/shows/{start_date}/{days}": {
         parameters: {
             query?: never;
@@ -404,6 +472,40 @@ export interface paths {
         };
         /** Get upcoming episodes from shows your mutual follows have watched */
         get: operations["_v1_calendars_friends_shows_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/my/dvd/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DVD/physical release calendar (contract path) */
+        get: operations["_v1_calendars_my_dvd_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/my/media/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Movies and episodes releasing in a date range (contract path) */
+        get: operations["_v1_calendars_my_media_start_date_days_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -446,6 +548,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/calendars/my/shows/finales/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the finales feed (contract path) */
+        get: operations["_v1_calendars_my_shows_finales_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/my/shows/new/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the new feed (contract path) */
+        get: operations["_v1_calendars_my_shows_new_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/my/shows/premieres/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show calendar for the premieres feed (contract path) */
+        get: operations["_v1_calendars_my_shows_premieres_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calendars/my/streaming/{start_date}/{days}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Streaming release calendar (contract path) */
+        get: operations["_v1_calendars_my_streaming_start_date_days_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/calendars/releases/hot/{start_date}/{days}": {
         parameters: {
             query?: never;
@@ -453,7 +623,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
+        /** Titles with a watchlist, collection or history signal releasing in a date range */
         get: operations["_v1_calendars_releases_hot_start_date_days_GET"];
         put?: never;
         post?: never;
@@ -1016,6 +1186,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/episodes/{id}/watchnow/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Episode watch-now providers for one country (contract path) */
+        get: operations["_v1_episodes_id_watchnow_country_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/genres/{type}": {
         parameters: {
             query?: never;
@@ -1471,7 +1658,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Popular movies and shows merged into one feed */
         get: operations["_v1_media_popular_GET"];
         put?: never;
         post?: never;
@@ -1505,7 +1692,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Trending movies and shows merged into one feed */
         get: operations["_v1_media_trending_GET"];
         put?: never;
         post?: never;
@@ -1590,7 +1777,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (lists engine) */
+        /** Get lists containing a movie by kind and sort */
         get: operations["_v1_movies_id_lists_type_sort_GET"];
         put?: never;
         post?: never;
@@ -1709,7 +1896,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get stats for a movie (watchers, plays, collectors, comments, lists, votes, favorited, recommended) */
+        /** Get stats for a movie */
         get: operations["_v1_movies_id_stats_GET"];
         put?: never;
         post?: never;
@@ -1838,6 +2025,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/movies/{id}/watchnow/justwatch_links/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** JustWatch links for a movie in one country (contract path) */
+        get: operations["_v1_movies_id_watchnow_justwatch_links_country_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/movies/anticipated": {
         parameters: {
             query?: never;
@@ -1862,8 +2066,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most collected movies in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_movies_collected_period_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/movies/favorited/{period}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Most favorited movies in a period (daily|weekly|monthly|yearly|all) */
+        get: operations["_v1_movies_favorited_period_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1879,7 +2100,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Currently hot movies (activity in the last 24 hours) */
         get: operations["_v1_movies_hot_GET"];
         put?: never;
         post?: never;
@@ -1896,7 +2117,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most played movies in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_movies_played_period_GET"];
         put?: never;
         post?: never;
@@ -1947,7 +2168,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
+        /** Movies with a digital release in the period, ranked by watchers in that period */
         get: operations["_v1_movies_streaming_period_GET"];
         put?: never;
         post?: never;
@@ -2015,7 +2236,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most watched movies in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_movies_watched_period_GET"];
         put?: never;
         post?: never;
@@ -2187,7 +2408,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (lists engine) */
+        /** Get lists containing a person by kind and sort */
         get: operations["_v1_people_id_lists_type_sort_GET"];
         put?: never;
         post?: never;
@@ -2257,6 +2478,23 @@ export interface paths {
         };
         /** Get people updated since a date */
         get: operations["_v1_people_updates_start_date_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/people/updates/id/{start_date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get IDs of people updated since a date */
+        get: operations["_v1_people_updates_id_start_date_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2486,6 +2724,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/search/{type}/exact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exact title match for one media type (contract path) */
+        get: operations["_v1_search_type_exact_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/search/exact": {
         parameters: {
             query?: never;
@@ -2529,7 +2784,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Parity stub — not implemented (search engine) */
+        /** Record a recent search (contract path) */
         post: operations["_v1_search_recent_POST"];
         delete?: never;
         options?: never;
@@ -2544,7 +2799,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (search engine) */
+        /** Trending recent searches for one media type (contract path) */
         get: operations["_v1_search_recent_by_id_global_type_GET"];
         put?: never;
         post?: never;
@@ -2731,7 +2986,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (lists engine) */
+        /** Get lists containing a show by kind and sort */
         get: operations["_v1_shows_id_lists_type_sort_GET"];
         put?: never;
         post?: never;
@@ -2818,9 +3073,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset the caller's watched-episode history for one show (ratings/collection untouched) */
+        /** Record a watched-progress reset point for one show (history is kept) */
         post: operations["_v1_shows_id_progress_watched_reset_POST"];
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Undo a watched-progress reset for one show */
         delete: operations["_v1_shows_id_progress_watched_reset_DELETE"];
         options?: never;
         head?: never;
@@ -3021,7 +3276,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (TMDB metadata ingest) */
+        /** Get all cast and crew for an episode */
         get: operations["_v1_shows_id_seasons_season_episodes_episode_people_GET"];
         put?: never;
         post?: never;
@@ -3150,6 +3405,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/shows/{id}/seasons/{season}/episodes/{episode}/watchnow/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Episode watch-now providers for one country (contract path) */
+        get: operations["_v1_shows_id_seasons_season_episodes_episode_watchnow_country_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/shows/{id}/seasons/{season}/info": {
         parameters: {
             query?: never;
@@ -3167,6 +3439,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/shows/{id}/seasons/{season}/lists/{type}/{sort}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get lists containing a season by kind and sort */
+        get: operations["_v1_shows_id_seasons_season_lists_type_sort_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/shows/{id}/seasons/{season}/people": {
         parameters: {
             query?: never;
@@ -3174,7 +3463,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (TMDB metadata ingest) */
+        /** Get all cast and crew for a season */
         get: operations["_v1_shows_id_seasons_season_people_GET"];
         put?: never;
         post?: never;
@@ -3310,7 +3599,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get stats for a show (watchers, plays, collectors, comments, lists, votes, favorited, recommended) */
+        /** Get stats for a show */
         get: operations["_v1_shows_id_stats_GET"];
         put?: never;
         post?: never;
@@ -3463,8 +3752,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most collected shows in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_shows_collected_period_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shows/favorited/{period}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Most favorited shows in a period (daily|weekly|monthly|yearly|all) */
+        get: operations["_v1_shows_favorited_period_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3480,7 +3786,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Currently hot shows (activity in the last 24 hours) */
         get: operations["_v1_shows_hot_GET"];
         put?: never;
         post?: never;
@@ -3497,7 +3803,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most played shows in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_shows_played_period_GET"];
         put?: never;
         post?: never;
@@ -3616,7 +3922,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (stats & rankings engine) */
+        /** Most watched shows in a period (daily|weekly|monthly|yearly|all) */
         get: operations["_v1_shows_watched_period_GET"];
         put?: never;
         post?: never;
@@ -3757,23 +4063,6 @@ export interface paths {
         };
         /** Collection rows for one media type (contract path) */
         get: operations["_v1_sync_collection_type_GET"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sync/collection/episodes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Parity stub — not implemented (season/episode-level sync) */
-        get: operations["_v1_sync_collection_episodes_GET"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4450,6 +4739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sync/watchlist/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Parity stub — not implemented (parity tracker) */
+        get: operations["_v1_sync_watchlist_episodes_GET"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sync/watchlist/movies": {
         parameters: {
             query?: never;
@@ -4496,6 +4802,23 @@ export interface paths {
         put: operations["_v1_sync_watchlist_reorder_PUT"];
         /** Reorder watchlist items */
         post: operations["_v1_sync_watchlist_reorder_POST"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sync/watchlist/seasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Parity stub — not implemented (parity tracker) */
+        get: operations["_v1_sync_watchlist_seasons_GET"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6175,7 +6498,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
+        /** Watch-now sources for every country, keyed by country code */
         get: operations["_v1_watchnow_sources_GET"];
         put?: never;
         post?: never;
@@ -6192,7 +6515,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (calendars & Watch Now data) */
+        /** Watch-now sources for one country */
         get: operations["_v1_watchnow_sources_countryCode_GET"];
         put?: never;
         post?: never;
@@ -7855,7 +8178,7 @@ export interface operations {
             };
         };
     };
-    _v1_calendars_target_dvd_start_date_days_GET: {
+    _v1_calendars_all_dvd_start_date_days_GET: {
         parameters: {
             query?: never;
             header?: never;
@@ -7864,6 +8187,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Calendar movie entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -7920,15 +8250,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — movies carries a single released DATE; there is no dvd/digital/physical date column, so a DVD calend (#69) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7938,7 +8259,7 @@ export interface operations {
             };
         };
     };
-    _v1_calendars_target_streaming_start_date_days_GET: {
+    _v1_calendars_all_media_start_date_days_GET: {
         parameters: {
             query?: never;
             header?: never;
@@ -7947,6 +8268,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Calendar media entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -8003,15 +8331,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — No streaming-release date is stored; watch providers live in movies.metadata per title (TMDB), not a (#69) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8037,7 +8356,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid start_date or days parameter */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8118,7 +8437,331 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid start_date or days parameter */
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_all_shows_finales_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_all_shows_new_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_all_shows_premieres_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_all_streaming_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar movie entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8199,7 +8842,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid parameters */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8280,7 +8923,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid parameters */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8290,6 +8933,168 @@ export interface operations {
                 };
             };
             /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_my_dvd_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar movie entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_my_media_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar media entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -8361,7 +9166,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid parameters */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8442,7 +9247,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid parameters */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8507,7 +9312,7 @@ export interface operations {
             };
         };
     };
-    _v1_calendars_releases_hot_start_date_days_GET: {
+    _v1_calendars_my_shows_finales_start_date_days_GET: {
         parameters: {
             query?: never;
             header?: never;
@@ -8516,6 +9321,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -8579,8 +9391,323 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — No unified release feed: 'hot' mixes theatrical, streaming and episode releases in one ranked list;  (#69) */
-            501: {
+        };
+    };
+    _v1_calendars_my_shows_new_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_my_shows_premieres_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar show entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_my_streaming_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar movie entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_calendars_releases_hot_start_date_days_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hot release entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8606,7 +9733,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid start_date or days parameter */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8687,7 +9814,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid start_date or days parameter */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8768,7 +9895,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid start_date or days parameter */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8849,7 +9976,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid parameters */
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -11995,6 +13122,96 @@ export interface operations {
             };
         };
     };
+    _v1_episodes_id_watchnow_country_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider availability by category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Provider data temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _v1_genres_type_GET: {
         parameters: {
             query?: never;
@@ -14731,6 +15948,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Popular media */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -14787,15 +16011,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14913,6 +16128,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Trending media */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -14969,15 +16191,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15309,15 +16522,6 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented (requires lists engine) */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
         };
     };
     _v1_movies_id_lists_type_sort_GET: {
@@ -15329,7 +16533,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Lists containing the movie */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type, sort or movie id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15347,7 +16558,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description not found */
+            /** @description Movie not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -15385,15 +16596,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — lists engine (issue #67) (#67) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16508,15 +17710,6 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented (requires activity engine) */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
         };
     };
     _v1_movies_id_watchnow_country_GET: {
@@ -16554,6 +17747,96 @@ export interface operations {
                 };
             };
             /** @description Media not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Provider data temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_movies_id_watchnow_justwatch_links_country_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JustWatch links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -16699,6 +17982,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -16762,8 +18052,80 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
+        };
+    };
+    _v1_movies_favorited_period_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16782,6 +18144,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Hot items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -16838,15 +18207,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16865,6 +18225,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -16921,15 +18288,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17119,6 +18477,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked streaming movies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -17175,15 +18540,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Trakt's streaming list is driven by streaming release dates, which we do not store (see /calendars/a (#69) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17445,6 +18801,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -17501,15 +18864,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18455,7 +19809,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Lists containing the person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type, sort or person id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18473,7 +19834,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description not found */
+            /** @description Person not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -18511,15 +19872,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — lists engine (issue #67) (#67) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18789,6 +20141,87 @@ export interface operations {
                 content?: never;
             };
             /** @description Invalid start_date format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_people_updates_id_start_date_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated person IDs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19937,6 +21370,87 @@ export interface operations {
             };
         };
     };
+    _v1_search_type_exact_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type or query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _v1_search_exact_GET: {
         parameters: {
             query?: never;
@@ -20108,7 +21622,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Recent search recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type or body */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20117,7 +21638,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20126,7 +21647,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description not found */
+            /** @description Search item not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -20164,15 +21685,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Persisting a recent search needs a recent-searches table, which does not exist (search is stateless  (#70) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20191,7 +21703,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Trending search items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20247,15 +21766,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Same missing store; the Trakt id-keyed variant too. (#70) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21087,15 +22597,6 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented (requires lists engine) */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
         };
     };
     _v1_shows_id_lists_type_sort_GET: {
@@ -21107,7 +22608,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Lists containing the show */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type, sort or show id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21125,7 +22633,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description not found */
+            /** @description Show not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -21163,15 +22671,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — lists engine (issue #67) (#67) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21521,8 +23020,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Progress after reset */
-            200: {
+            /** @description The reset point */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21546,7 +23045,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Show not found */
+            /** @description not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -21602,6 +23101,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Reset removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -21611,7 +23117,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -21658,15 +23164,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22594,6 +24091,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description People */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -22650,15 +24154,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Episode credits are not ingested (credits table is written for movie/show only). (#68) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23253,6 +24748,96 @@ export interface operations {
             };
         };
     };
+    _v1_shows_id_seasons_season_episodes_episode_watchnow_country_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider availability by category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Provider data temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _v1_shows_id_seasons_season_info_GET: {
         parameters: {
             query?: never;
@@ -23343,6 +24928,87 @@ export interface operations {
             };
         };
     };
+    _v1_shows_id_seasons_season_lists_type_sort_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lists containing the season */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid type, sort, show id or season number */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Show or season not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _v1_shows_id_seasons_season_people_GET: {
         parameters: {
             query?: never;
@@ -23352,6 +25018,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description People */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -23408,15 +25081,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Season credits are not ingested: the credits table takes a media_type, but only movie/show credits a (#68) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24603,15 +26267,6 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented (requires activity engine) */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
         };
     };
     _v1_shows_id_watchnow_country_GET: {
@@ -24794,6 +26449,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -24857,8 +26519,80 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
+        };
+    };
+    _v1_shows_favorited_period_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24877,6 +26611,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Hot items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -24933,15 +26674,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24960,6 +26692,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -25016,15 +26755,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25277,7 +27007,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — Driven by streaming release dates, which are not stored (see /calendars/all/streaming). (#69) */
+            /** @description Not implemented — STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider cat (#69) */
             501: {
                 headers: {
                     [name: string]: unknown;
@@ -25540,6 +27270,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Ranked items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -25596,15 +27333,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — stats/rankings engine (issue #66) (#66) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26525,89 +28253,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    _v1_sync_collection_episodes_GET: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description invalid request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description unprocessable */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description rate limited */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — user_collection.media_type is 'movie' or 'show' only; an episode collection row cannot be stored. (#71) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -30181,6 +31826,89 @@ export interface operations {
             };
         };
     };
+    _v1_sync_watchlist_episodes_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not implemented — user_watchlist.media_type is 'movie' or 'show' only. (#106) */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _v1_sync_watchlist_movies_GET: {
         parameters: {
             query?: never;
@@ -30496,6 +32224,89 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _v1_sync_watchlist_seasons_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not implemented — user_watchlist.media_type is 'movie' or 'show' only. (#106) */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40387,6 +42198,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Source records keyed by country */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -40443,15 +42261,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — There is no provider catalogue table: providers are TMDB per-title metadata (metadata JSONB), with n (#69) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40470,6 +42279,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description One source record keyed by country */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description invalid request */
             400: {
                 headers: {
@@ -40526,15 +42342,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — Same gap: no catalogue to filter by country. (#69) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };

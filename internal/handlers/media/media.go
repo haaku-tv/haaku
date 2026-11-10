@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/haaku-tv/haaku/internal/contractshape"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/openapi"
 
@@ -24,9 +25,9 @@ func registerOpenAPIRoutes() {
 		{Method: "GET", Path: "/v1/movies/{id}", Summary: "Get a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Movie"}},
 		{Method: "GET", Path: "/v1/movies/{id}/people", Summary: "Get cast and crew for a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "People"}},
 		{Method: "GET", Path: "/v1/movies/{id}/ratings", Summary: "Get ratings for a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Rating summary"}},
-		{Method: "GET", Path: "/v1/movies/{id}/stats", Summary: "Get stats for a movie (watchers, plays, collectors, comments, lists, votes, favorited, recommended)", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Stats"}},
-		{Method: "GET", Path: "/v1/movies/{id}/lists", Summary: "Get lists containing a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Lists", 501: "Not implemented (requires lists engine)"}},
-		{Method: "GET", Path: "/v1/movies/{id}/watching", Summary: "Users watching a movie right now", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Watching", 501: "Not implemented (requires activity engine)"}},
+		{Method: "GET", Path: "/v1/movies/{id}/stats", Summary: "Get stats for a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Stats"}},
+		{Method: "GET", Path: "/v1/movies/{id}/lists", Summary: "Get lists containing a movie", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Lists"}},
+		{Method: "GET", Path: "/v1/movies/{id}/watching", Summary: "Users watching a movie right now", Tags: []string{"Movies"}, Auth: "none", StatusCodes: map[int]string{200: "Watching"}},
 		{Method: "GET", Path: "/v1/movies/{id}/comments/{sort}", Summary: "Get comments for a movie, sorted (newest, oldest, likes, replies, trending)", Tags: []string{"Movies"}, Auth: "optional", StatusCodes: map[int]string{200: "Comments", 400: "Invalid sort", 404: "Movie not found"}},
 
 		// Shows
@@ -37,9 +38,9 @@ func registerOpenAPIRoutes() {
 		{Method: "GET", Path: "/v1/shows/{id}/seasons/{season}/episodes/{episode}", Summary: "Get a single episode", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Episode"}},
 		{Method: "GET", Path: "/v1/shows/{id}/people", Summary: "Get cast and crew for a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "People"}},
 		{Method: "GET", Path: "/v1/shows/{id}/ratings", Summary: "Get ratings for a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Rating summary"}},
-		{Method: "GET", Path: "/v1/shows/{id}/stats", Summary: "Get stats for a show (watchers, plays, collectors, comments, lists, votes, favorited, recommended)", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Stats"}},
-		{Method: "GET", Path: "/v1/shows/{id}/lists", Summary: "Get lists containing a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Lists", 501: "Not implemented (requires lists engine)"}},
-		{Method: "GET", Path: "/v1/shows/{id}/watching", Summary: "Users watching a show right now", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Watching", 501: "Not implemented (requires activity engine)"}},
+		{Method: "GET", Path: "/v1/shows/{id}/stats", Summary: "Get stats for a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Stats"}},
+		{Method: "GET", Path: "/v1/shows/{id}/lists", Summary: "Get lists containing a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Lists"}},
+		{Method: "GET", Path: "/v1/shows/{id}/watching", Summary: "Users watching a show right now", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Watching"}},
 		{Method: "GET", Path: "/v1/shows/{id}/next_episode", Summary: "Get the next scheduled episode for a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Next episode", 204: "No next episode", 404: "Show not found"}},
 		{Method: "GET", Path: "/v1/shows/{id}/last_episode", Summary: "Get the most recently aired episode for a show", Tags: []string{"Shows"}, Auth: "none", StatusCodes: map[int]string{200: "Last episode", 204: "No aired episode", 404: "Show not found"}},
 		{Method: "GET", Path: "/v1/shows/{id}/comments/{sort}", Summary: "Get comments for a show, sorted (newest, oldest, likes, replies, trending)", Tags: []string{"Shows"}, Auth: "optional", StatusCodes: map[int]string{200: "Comments", 400: "Invalid sort", 404: "Show not found"}},
@@ -62,10 +63,15 @@ func RegisterRoutes(api fiber.Router) {
 	// --- Movies ---
 	movies := api.Group("/movies")
 
+	// Contract-shaped streaming ranking. It must precede /movies/:id: Fiber
+	// matches in registration order, so otherwise "streaming" is read as an id.
+	registerStreamingRoutes(movies)
+
 	movies.Get("/:id", handleGetMovie)
 	movies.Get("/:id/people", handleGetMoviePeople)
 	movies.Get("/:id/ratings", handleGetMovieRatingSummary)
 	movies.Get("/:id/stats", handleGetMovieStats)
+	movies.Get("/:id/lists/:type/:sort", handleGetMovieListsByTypeSort)
 	movies.Get("/:id/lists", handleGetMovieLists)
 	movies.Get("/:id/watching", handleGetMovieWatching)
 	movies.Get("/:id/comments/:sort", handleGetMovieComments)
@@ -81,6 +87,8 @@ func RegisterRoutes(api fiber.Router) {
 	shows.Get("/:id/people", handleGetShowPeople)
 	shows.Get("/:id/ratings", handleGetShowRatingSummary)
 	shows.Get("/:id/stats", handleGetShowStats)
+	shows.Get("/:id/seasons/:season/lists/:type/:sort", handleGetShowSeasonLists)
+	shows.Get("/:id/lists/:type/:sort", handleGetShowListsByTypeSort)
 	shows.Get("/:id/lists", handleGetShowLists)
 	shows.Get("/:id/watching", handleGetShowWatching)
 	shows.Get("/:id/next_episode", handleGetShowNextEpisode)
@@ -95,6 +103,12 @@ func RegisterRoutes(api fiber.Router) {
 	people.Get("/:id", handleGetPerson)
 	people.Get("/:id/movies", handleGetPersonMovies)
 	people.Get("/:id/shows", handleGetPersonShows)
+	people.Get("/:id/lists/:type/:sort", handleGetPersonListsByTypeSort)
+
+	// --- TMDB metadata sub-resources (issue #68) ---
+	RegisterMetadataRoutes(api)
+	registerContractWatchingRoutes(api)
+	registerContractTranslationAllRoutes(api)
 
 	// --- Translation & alias routes ---
 	RegisterTranslationRoutes(api)
@@ -169,19 +183,45 @@ func handleGetMovieRatingSummary(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	return c.JSON(buildRatingSummary(movie.RatingAvg, movie.RatingCount))
+	distribution, err := queryRatingDistribution(db, "movie", movie.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+	summary := buildRatingSummary(movie.RatingAvg, movie.RatingCount)
+	summary.Distribution = distribution
+	return c.JSON(summary)
 }
 
-func handleGetMovieLists(c *fiber.Ctx) error {
-	// Lists containing a movie require the lists engine (not landed). Fails
-	// closed with 501 rather than return a fabricated empty list.
-	return response.NotImplemented(c, "lists require the lists engine, which is not implemented")
+func handleGetMovieStats(c *fiber.Ctx) error {
+	// Resolve the contract id (numeric, slug or ?id_type=) the same way the
+	// other media routes do; ResolveIDAs owns the 404 for an unknown item.
+	_, id, err := ResolveIDAs(c, c.Params("id"), "movie")
+	if err != nil {
+		return err
+	}
+
+	db, dbErr := database.GetDB()
+	if dbErr != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database unavailable")
+	}
+
+	var movie database.Movie
+	if err := db.First(&movie, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response.NotFound(c, "movie not found")
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+
+	stats, err := queryMovieStats(db, movie.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+	return c.JSON(stats)
 }
 
 func handleGetMovieWatching(c *fiber.Ctx) error {
-	// Users currently watching require scrobble/activity wiring (not landed).
-	// Fails closed with 501 rather than return a fabricated empty array.
-	return response.NotImplemented(c, "watching requires the activity engine, which is not implemented")
+	return serveMovieWatching(c)
 }
 
 // ---------------------------------------------------------------------------
@@ -423,19 +463,45 @@ func handleGetShowRatingSummary(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	return c.JSON(buildRatingSummary(show.RatingAvg, show.RatingCount))
+	distribution, err := queryRatingDistribution(db, "show", show.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+	summary := buildRatingSummary(show.RatingAvg, show.RatingCount)
+	summary.Distribution = distribution
+	return c.JSON(summary)
 }
 
-func handleGetShowLists(c *fiber.Ctx) error {
-	// Lists containing a show require the lists engine (not landed). Fails
-	// closed with 501 rather than return a fabricated empty list.
-	return response.NotImplemented(c, "lists require the lists engine, which is not implemented")
+func handleGetShowStats(c *fiber.Ctx) error {
+	// Resolve the contract id (numeric, slug or ?id_type=) the same way the
+	// other media routes do; ResolveIDAs owns the 404 for an unknown item.
+	_, id, err := ResolveIDAs(c, c.Params("id"), "show")
+	if err != nil {
+		return err
+	}
+
+	db, dbErr := database.GetDB()
+	if dbErr != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database unavailable")
+	}
+
+	var show database.Show
+	if err := db.First(&show, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response.NotFound(c, "show not found")
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+
+	stats, err := queryShowStats(db, show.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
+	}
+	return c.JSON(stats)
 }
 
 func handleGetShowWatching(c *fiber.Ctx) error {
-	// Users currently watching require scrobble/activity wiring (not landed).
-	// Fails closed with 501 rather than return a fabricated empty array.
-	return response.NotImplemented(c, "watching requires the activity engine, which is not implemented")
+	return serveShowWatching(c)
 }
 
 // handleGetShowNextEpisode returns the next scheduled episode for a show: the
@@ -506,28 +572,11 @@ func handleGetPerson(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	resp := BuildPersonResponse(&person)
-
-	// Include credits.
-	var credits []database.Credit
-	db.Where("person_id = ?", person.ID).Order("\"order\" ASC").Find(&credits)
-
-	movieCredits := make([]CreditResponse, 0)
-	showCredits := make([]CreditResponse, 0)
-	for _, cr := range credits {
-		crResp := creditToResponse(cr)
-		switch cr.MediaType {
-		case "movie":
-			movieCredits = append(movieCredits, crResp)
-		case "show":
-			showCredits = append(showCredits, crResp)
-		}
-	}
-	resp.Credits = &PersonCredits{
-		Cast: append(movieCredits, showCredits...),
-	}
-
-	return c.JSON(resp)
+	// The person summary is served in the Trakt contract shape (the credits
+	// live on /people/{id}/{movies,shows}). Fiber treats /people/1 and
+	// /people/1/ as the same route when strict routing is off, so one
+	// registration answers both forms.
+	return c.JSON(contractshape.Person(&person))
 }
 
 func handleGetPersonMovies(c *fiber.Ctx) error {

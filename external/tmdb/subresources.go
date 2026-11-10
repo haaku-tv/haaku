@@ -52,38 +52,20 @@ func (c *Client) GetMovieReleaseDates(id int) (*ReleaseDates, error) {
 	return decode[ReleaseDates](resp)
 }
 
-// GetMovieTranslations returns every language TMDB holds for a movie.
-func (c *Client) GetMovieTranslations(id int) (*Translations, error) {
-	resp, err := c.doV3("GET", fmt.Sprintf("/movie/%d/translations", id), nil)
-	if err != nil {
-		return nil, err
-	}
-	return decode[Translations](resp)
-}
-
 // GetShowTranslations returns every language TMDB holds for a show.
-func (c *Client) GetShowTranslations(id int) (*Translations, error) {
+func (c *Client) GetShowTranslations(id int) (*TranslationsResponse, error) {
 	resp, err := c.doV3("GET", fmt.Sprintf("/tv/%d/translations", id), nil)
 	if err != nil {
 		return nil, err
 	}
-	return decode[Translations](resp)
+	return decode[TranslationsResponse](resp)
 }
 
 // GetSeasonTranslations returns every language TMDB holds for a season.
-func (c *Client) GetSeasonTranslations(showID, season int) (*Translations, error) {
+func (c *Client) GetSeasonTranslations(showID, season int) (*TranslationsResponse, error) {
 	resp, err := c.doV3("GET", fmt.Sprintf("/tv/%d/season/%d/translations", showID, season), nil)
 	if err != nil {
 		return nil, err
 	}
-	return decode[Translations](resp)
-}
-
-// GetEpisodeTranslations returns every language TMDB holds for an episode.
-func (c *Client) GetEpisodeTranslations(showID, season, episode int) (*Translations, error) {
-	resp, err := c.doV3("GET", fmt.Sprintf("/tv/%d/season/%d/episode/%d/translations", showID, season, episode), nil)
-	if err != nil {
-		return nil, err
-	}
-	return decode[Translations](resp)
+	return decode[TranslationsResponse](resp)
 }
