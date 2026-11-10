@@ -37,14 +37,15 @@ var userScopedTables = []struct{ table, column string }{
 	{"integration_tokens", "user_id"},
 	{"user_notes", "user_id"},
 	{"saved_filters", "user_id"},
-	// Local-account rows (issue #53). All three cascade from users in
+	// Local-account rows (issue #53). All four cascade from users in
 	// PostgreSQL, but the wipe is explicit per table rather than relying on a
-	// cascade — and a deleted account must never leave its password hash (or a
-	// live session row) behind on any backend, including sqlite where foreign
-	// keys are off by default.
+	// cascade — and a deleted account must never leave its password hash, a
+	// live session row, or a working `tk_` API key (issue #92) behind on any
+	// backend, including sqlite where foreign keys are off by default.
 	{"local_credentials", "user_id"},
 	{"local_sessions", "user_id"},
 	{"local_auth_tokens", "user_id"},
+	{"api_keys", "user_id"},
 }
 
 // DeleteUserData hard-deletes a user and every row they own, in one

@@ -7,7 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/openapi"
 	"github.com/haaku-tv/haaku/internal/response"
 	tredis "github.com/haaku-tv/haaku/redis"
@@ -52,6 +54,10 @@ func apiInternalError(c *fiber.Ctx, message string) error {
 	return writeError(c, fiber.StatusInternalServerError, "internal", message)
 }
 
+func apiNotFound(c *fiber.Ctx, message string) error {
+	return writeError(c, fiber.StatusNotFound, "not_found", message)
+}
+
 // ---------------------------------------------------------------------------
 // OpenAPI route registration
 // ---------------------------------------------------------------------------
@@ -68,11 +74,23 @@ func init() {
 }
 
 // RegisterAPIKeyRoutes wires all API key routes.
+//
+// AuthRequired is applied to each route, the way users.RegisterRoutes does it:
+// passing the middleware to api.Group would register a handler at the group
+// prefix itself (Fiber's Group(prefix, handlers...) is a Use), which adds a
+// `/v1/users/me/api_keys` route ahead of the real one and trips
+// TestNoStaticRouteIsShadowed.
+//
+// Without it, c.Locals("user_id") is empty for every caller, so each handler's
+// own `apiUnauthorized` branch is the only branch that can run and all three
+// routes answer 401 to a signed-in client (issue #92). Worse than a dead
+// settings page — the frontend clears the stored session on any 401, so opening
+// Settings → API keys logged the user out.
 func RegisterAPIKeyRoutes(api fiber.Router) {
 	me := api.Group("/users/me/api_keys")
-	me.Post("/", handleCreateAPIKey)
-	me.Get("/", handleListAPIKeys)
-	me.Delete("/:key_id", handleRevokeAPIKey)
+	me.Post("/", AuthRequired(), handleCreateAPIKey)
+	me.Get("/", AuthRequired(), handleListAPIKeys)
+	me.Delete("/:key_id", AuthRequired(), handleRevokeAPIKey)
 }
 
 // ---------------------------------------------------------------------------
@@ -101,9 +119,13 @@ type createAPIKeyResponse struct {
 }
 
 type listAPIKeyResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Prefix    string `json:"prefix"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	// MaskedKey is the same value as Prefix in the shape the settings page
+	// reads for display. The raw key is never part of a list response — it
+	// exists only in the create response.
+	MaskedKey string `json:"masked_key"`
 	CreatedAt string `json:"created_at"`
 	LastUsed  string `json:"last_used,omitempty"`
 }
@@ -124,6 +146,12 @@ func handleCreateAPIKey(c *fiber.Ctx) error {
 		return err
 	}
 
+	// Which store owns the key is the instance's identity mode, not a
+	// per-request decision (issue #92).
+	if LocalAuthEnabled() {
+		return createLocalAPIKeyResponse(c, userID, req.Name)
+	}
+
 	// Generate tk_ prefix + 32 random bytes hex
 	randomBytes, err := generateAPIKeyBytes()
 	if err != nil {
@@ -131,7 +159,7 @@ func handleCreateAPIKey(c *fiber.Ctx) error {
 	}
 
 	fullKey := apiKeyPrefix + hex.EncodeToString(randomBytes)
-	prefix := fullKey[:10] // "tk_" + first 6 hex chars
+	prefix := fullKey[:apiKeyDisplayLen]
 	keyHash := hashAPIKey(fullKey)
 
 	entry := APIKeyEntry{
@@ -156,11 +184,35 @@ func handleCreateAPIKey(c *fiber.Ctx) error {
 	})
 }
 
+// createLocalAPIKeyResponse mints a key against the local store. The raw key is
+// in this response and nowhere else.
+func createLocalAPIKeyResponse(c *fiber.Ctx, userID, name string) error {
+	db, err := database.GetDB()
+	if err != nil {
+		return apiInternalError(c, "failed to store API key")
+	}
+	fullKey, row, err := createLocalAPIKey(db, userID, name)
+	if err != nil {
+		log.Printf("[apikey] failed to store local API key: %v", err)
+		return apiInternalError(c, "failed to store API key")
+	}
+	return c.Status(fiber.StatusCreated).JSON(createAPIKeyResponse{
+		ID:     row.ID,
+		Key:    fullKey,
+		Name:   row.Name,
+		Prefix: row.Prefix,
+	})
+}
+
 // GET /v1/users/me/api_keys — list user's keys (masked)
 func handleListAPIKeys(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(string)
 	if !ok || userID == "" {
 		return apiUnauthorized(c)
+	}
+
+	if LocalAuthEnabled() {
+		return listLocalAPIKeyResponse(c, userID)
 	}
 
 	keys, err := getAPIKeysFromClerk(userID)
@@ -174,13 +226,50 @@ func handleListAPIKeys(c *fiber.Ctx) error {
 		result = append(result, listAPIKeyResponse{
 			ID:        k.ID,
 			Name:      k.Name,
-			Prefix:    maskKey(k.Prefix),
+			Prefix:    k.Prefix,
+			MaskedKey: maskKey(k.Prefix),
 			CreatedAt: k.CreatedAt,
 			LastUsed:  k.LastUsed,
 		})
 	}
 
 	return c.JSON(result)
+}
+
+// listLocalAPIKeyResponse serves the caller's locally stored keys. Nothing here
+// can leak a raw key: the store keeps only the blind index, which is not part of
+// the response struct.
+func listLocalAPIKeyResponse(c *fiber.Ctx, userID string) error {
+	db, err := database.GetDB()
+	if err != nil {
+		return apiInternalError(c, "failed to retrieve API keys")
+	}
+	rows, err := listLocalAPIKeys(db, userID)
+	if err != nil {
+		log.Printf("[apikey] failed to list local API keys: %v", err)
+		return apiInternalError(c, "failed to retrieve API keys")
+	}
+	result := make([]listAPIKeyResponse, 0, len(rows))
+	for _, k := range rows {
+		result = append(result, listAPIKeyResponse{
+			ID:        k.ID,
+			Name:      k.Name,
+			Prefix:    k.Prefix,
+			MaskedKey: maskKey(k.Prefix),
+			CreatedAt: k.CreatedAt.UTC().Format(time.RFC3339),
+			LastUsed:  formatLastUsed(k.LastUsedAt),
+		})
+	}
+	return c.JSON(result)
+}
+
+// formatLastUsed renders a nullable timestamp the way the rest of this file
+// renders times: RFC3339 UTC, empty when the key has never been used.
+func formatLastUsed(t *time.Time) string {
+	if t == nil || t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // DELETE /v1/users/me/api_keys/:key_id — revoke an API key
@@ -193,6 +282,10 @@ func handleRevokeAPIKey(c *fiber.Ctx) error {
 	keyID := c.Params("key_id")
 	if keyID == "" {
 		return apiBadRequest(c, "key_id is required")
+	}
+
+	if LocalAuthEnabled() {
+		return revokeLocalAPIKeyResponse(c, userID, keyID)
 	}
 
 	if err := removeAPIKeyFromClerk(userID, keyID); err != nil {
@@ -208,12 +301,37 @@ func handleRevokeAPIKey(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": "revoked"})
 }
 
+// revokeLocalAPIKeyResponse deletes one of the caller's keys. Somebody else's
+// key is a 404, not a 500 and not a delete: the ownership predicate is part of
+// the DELETE, so there is no read-then-write window either.
+func revokeLocalAPIKeyResponse(c *fiber.Ctx, userID, keyID string) error {
+	db, err := database.GetDB()
+	if err != nil {
+		return apiInternalError(c, "failed to revoke API key")
+	}
+	switch err := revokeLocalAPIKey(db, userID, keyID); {
+	case errors.Is(err, ErrAPIKeyNotFound):
+		return apiNotFound(c, "api key not found")
+	case err != nil:
+		log.Printf("[apikey] failed to revoke local API key: %v", err)
+		return apiInternalError(c, "failed to revoke API key")
+	}
+	return c.JSON(fiber.Map{"status": "revoked"})
+}
+
 // ---------------------------------------------------------------------------
 // LookupUserByAPIKey — resolves an API key to a user ID
 // ---------------------------------------------------------------------------
 
-// LookupUserByAPIKey resolves a full API key string to the owning Clerk user ID.
-// Uses Redis cache (1h TTL) with Clerk API fallback.
+// LookupUserByAPIKey resolves a full API key string to the owning user ID.
+//
+// The two identity modes own separate key stores and an instance is only ever
+// one of them (issue #92): a local instance has no Clerk tenant to page
+// through, and a Clerk instance must not authenticate a row it never wrote.
+// authmode.go is the single switch, the same one the local session path uses.
+//
+// Clerk mode uses the Redis cache (1h TTL) with a Clerk API fallback; local
+// mode is a direct indexed lookup in the local store.
 func LookupUserByAPIKey(key string) (string, error) {
 	if !strings.HasPrefix(key, apiKeyPrefix) {
 		return "", fmt.Errorf("key does not have tk_ prefix")
@@ -225,9 +343,13 @@ func LookupUserByAPIKey(key string) (string, error) {
 		return "", fmt.Errorf("empty key")
 	}
 
+	if LocalAuthEnabled() {
+		return localLookupUserByAPIKey(key)
+	}
+
 	// Compute key hash for matching
 	keyHash := hashAPIKey(apiKeyPrefix + strippedKey)
-	prefix := key[:10] // tk_ + first 6 hex chars
+	prefix := key[:apiKeyDisplayLen] // tk_ + first 6 hex chars
 
 	// Try Redis cache first
 	cacheKey := apiKeyRedisPrefix + prefix

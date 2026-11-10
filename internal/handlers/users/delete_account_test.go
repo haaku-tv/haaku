@@ -73,6 +73,7 @@ func deleteTestDB(t *testing.T) *gorm.DB {
 		&database.LocalCredential{},
 		&database.LocalSession{},
 		&database.LocalAuthToken{},
+		&database.APIKey{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -183,9 +184,9 @@ func TestDeleteAccountLocalModeDeletesWithoutClerk(t *testing.T) {
 
 // TestDeleteAccountWipeRemovesLocalRows proves the wipe behind the endpoint:
 // the account row and every way back into it — its password hash, its live
-// sessions and its one-time reset tokens — are gone. Those three tables cascade
-// from users in PostgreSQL but not under every backend, and a deleted account
-// must not leave its credential behind on any of them.
+// sessions, its one-time reset tokens and its `tk_` API keys — are gone. Those
+// four tables cascade from users in PostgreSQL but not under every backend, and
+// a deleted account must not leave a working credential behind on any of them.
 func TestDeleteAccountWipeRemovesLocalRows(t *testing.T) {
 	// CreateSession derives its token from the root key, so this test needs one
 	// the same way the endpoint does. It is set here rather than inherited: CI's
@@ -200,6 +201,16 @@ func TestDeleteAccountWipeRemovesLocalRows(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
+	// A live API key for the account about to be deleted (issue #92). Created
+	// through the model rather than the auth helper: what is under test is the
+	// wipe, and the row is the thing the wipe has to reach.
+	if err := db.Create(&database.APIKey{
+		ID: "key_wipe_1", UserID: deleteTestUserID,
+		Prefix: "tk_abcdef", KeyHash: "hash_wipe_1", Name: "jellyfin",
+	}).Error; err != nil {
+		t.Fatalf("seed API key: %v", err)
+	}
+
 	if err := database.DeleteUserData(db, deleteTestUserID); err != nil {
 		t.Fatalf("DeleteUserData: %v", err)
 	}
@@ -211,6 +222,7 @@ func TestDeleteAccountWipeRemovesLocalRows(t *testing.T) {
 		{"local_credentials"},
 		{"local_auth_tokens"},
 		{"local_sessions"},
+		{"api_keys"},
 	} {
 		var n int64
 		if err := db.Table(tc.table).Where("user_id = ?", deleteTestUserID).Count(&n).Error; err != nil {
