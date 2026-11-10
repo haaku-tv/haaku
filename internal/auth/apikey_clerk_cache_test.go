@@ -415,27 +415,32 @@ func redisClientAs(t *testing.T, user, pass string) *goredis.Client {
 	return goredis.NewClient(opts)
 }
 
-// TestRevokeWithRedisRefusingEveryWriteStopsTrustingTheCache covers the state
-// left after the sentinel: Redis refuses DEL *and* SET, so no revocation can be
-// recorded in it at all.
+// TestRevokeWithRedisRefusingEveryWriteDeniesTheKey covers the state left after
+// the sentinel: Redis refuses DEL *and* SET, so no revocation can be recorded in
+// it at all.
 //
 // The revoke still reports success — Clerk holds the key list and the key is
 // genuinely gone from it — but this process must not keep answering the revoked
-// key from a cache it can no longer write to. The eviction suspends cache reads
-// for a cool-down, which is the only place the fact can live when the write path
-// is the thing that failed.
-func TestRevokeWithRedisRefusingEveryWriteStopsTrustingTheCache(t *testing.T) {
-	_, userA, _, keyA, _ := clerkFixtures(t)
+// key from a cache it can no longer write to. The failed eviction is remembered
+// for that key hash and every later lookup fails closed, which is immediate,
+// precise and does not expire: a cool-down would let this same process start
+// trusting the stale entry again once it elapsed.
+func TestRevokeWithRedisRefusingEveryWriteDeniesTheKey(t *testing.T) {
+	_, userA, userB, keyA, keyB := clerkFixtures(t)
 	admin := projredis.GetClient()
 	if admin == nil {
 		t.Fatal("no redis client installed")
 	}
-	// This test trips a process-wide window; leave it cleared for the others.
-	t.Cleanup(func() { apiKeyCacheBrokenUntil.Store(0) })
+	// The deny set is process-wide, and the fixture keys are deterministic: undo
+	// this test's entry so it cannot decide another test's outcome.
+	t.Cleanup(func() { apiKeyEvictionFailures.Delete(hashAPIKey(keyA)) })
 	ctx := context.Background()
 
 	if got, err := LookupUserByAPIKey(keyA); err != nil || got != userA {
 		t.Fatalf("warm key A = (%q, %v), want (%q, nil)", got, err, userA)
+	}
+	if got, err := LookupUserByAPIKey(keyB); err != nil || got != userB {
+		t.Fatalf("warm key B = (%q, %v), want (%q, nil)", got, err, userB)
 	}
 
 	user := "apikey-nowrite-" + strconv.FormatInt(time.Now().UnixNano(), 36)
@@ -464,9 +469,14 @@ func TestRevokeWithRedisRefusingEveryWriteStopsTrustingTheCache(t *testing.T) {
 	if got := clientGet(t, admin, apiKeyCacheKey(hashAPIKey(keyA))); got != userA {
 		t.Fatalf("entry = %q, want the stale %q for the degraded state to be the one under test", got, userA)
 	}
-	// And the revoked key still does not authenticate: this process has stopped
-	// reading a cache it cannot write to.
-	if got, err := LookupUserByAPIKey(keyA); err == nil {
-		t.Fatalf("the revoked key still authenticated as %q — a Redis that refuses every write left it usable", got)
+	// The revoked key is denied, twice over: nothing here expires.
+	for i := 1; i <= 2; i++ {
+		if got, err := LookupUserByAPIKey(keyA); err == nil {
+			t.Fatalf("lookup %d: the revoked key still authenticated as %q — a Redis that refuses every write left it usable", i, got)
+		}
+	}
+	// And the denial is per key: the other account's key is untouched.
+	if got, err := LookupUserByAPIKey(keyB); err != nil || got != userB {
+		t.Fatalf("lookup key B after key A was denied = (%q, %v), want (%q, nil)", got, err, userB)
 	}
 }

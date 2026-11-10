@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -371,11 +371,17 @@ func LookupUserByAPIKey(key string) (string, error) {
 	keyHash := hashAPIKey(apiKeyPrefix + strippedKey)
 	prefix := key[:apiKeyDisplayLen] // tk_ + first 6 hex chars
 
-	// Try Redis cache first — unless this process has learned that Redis refuses
-	// to write, in which case a hit cannot be trusted (see apiKeyCacheUnusable).
+	// A key whose eviction this process could NOT record in Redis is denied
+	// outright: the entry it left behind is known to be stale, and a cache hit is
+	// answered without ever consulting Clerk (see evictAPIKeyCache).
+	if apiKeyEvictionFailed(keyHash) {
+		return "", fmt.Errorf("api key not found")
+	}
+
+	// Try Redis cache first
 	cacheKey := apiKeyCacheKey(keyHash)
 	rdb := tredis.GetClient()
-	if rdb != nil && !apiKeyCacheUnusable() {
+	if rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		if cachedUserID, err := rdb.Get(ctx, cacheKey).Result(); err == nil && cachedUserID != "" {
@@ -694,12 +700,9 @@ func apiKeyCacheKey(keyHash string) string { return apiKeyRedisPrefix + keyHash 
 // finds nothing.
 //
 // If Redis refuses BOTH the delete and the sentinel write, no revocation can be
-// recorded in it at all, so this process stops trusting its cache reads for a
-// cool-down (see apiKeyCacheUnusable) and the error is returned. What cannot be
-// promised in that state is the other direction — an instance that never sees
-// this failure keeps serving the stale entry until its TTL expires. The only
-// ways to close that window are to fail the revoke request when the entry cannot
-// be neutralised, or to shorten the TTL.
+// recorded in it at all, so the key hash joins apiKeyEvictionFailures and every
+// later lookup for it fails closed in this process. What remains uncovered is a
+// process that never attempted the eviction — see that variable.
 func evictAPIKeyCache(keyHash string) error {
 	rdb := tredis.GetClient()
 	if rdb == nil || keyHash == "" {
@@ -712,31 +715,34 @@ func evictAPIKeyCache(keyHash string) error {
 	cacheKey := apiKeyCacheKey(keyHash)
 	if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
 		if setErr := rdb.Set(ctx, cacheKey, "", apiKeyCacheTTL).Err(); setErr != nil {
-			suspendAPIKeyCacheReads()
+			markAPIKeyEvictionFailed(keyHash)
 			return err
 		}
 	}
 	return nil
 }
 
-// apiKeyCacheUnusable marks the window in which this process refuses to answer an
-// API-key lookup from the cache, because Redis refused to record an eviction.
+// apiKeyEvictionFailures records the key hashes whose cache entry this process
+// could not neutralise, because Redis refused both the delete and the sentinel
+// write.
 //
-// It is deliberately in-process and time-boxed: there is no Redis write that
-// could carry the fact to another instance (that is the failure being handled),
-// and it must not be permanent — the cache is an optimization, and a permanent
-// bypass would send every API-key authentication through Clerk's paged user list
-// forever. After the cool-down the cache is tried again, which re-learns the
-// state if it has not changed.
-var apiKeyCacheBrokenUntil atomic.Int64 // unix nanos; 0 = usable
+// The fact has to live here: recording it in Redis is exactly what failed. It is
+// precise (the failed eviction names the stale entry) and it does not expire —
+// a cool-down would let the same process start trusting that entry again once it
+// elapsed, which is the hole this closes. A lookup for one of these hashes fails
+// closed instead of reading a cache the process knows is stale.
+//
+// What it cannot cover is a process that never attempted the eviction: a restart,
+// or another instance, still serves the stale entry until its TTL expires. The
+// ways to close that are to fail the revoke request when the entry cannot be
+// neutralised, or to shorten apiKeyCacheTTL — policy, not a bug fix.
+var apiKeyEvictionFailures sync.Map // map[string]struct{}
 
-const apiKeyCacheReadCoolDown = 30 * time.Second
-
-func suspendAPIKeyCacheReads() {
-	apiKeyCacheBrokenUntil.Store(time.Now().Add(apiKeyCacheReadCoolDown).UnixNano())
+func markAPIKeyEvictionFailed(keyHash string) {
+	apiKeyEvictionFailures.Store(keyHash, struct{}{})
 }
 
-func apiKeyCacheUnusable() bool {
-	until := apiKeyCacheBrokenUntil.Load()
-	return until != 0 && time.Now().UnixNano() < until
+func apiKeyEvictionFailed(keyHash string) bool {
+	_, failed := apiKeyEvictionFailures.Load(keyHash)
+	return failed
 }
