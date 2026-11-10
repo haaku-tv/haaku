@@ -414,3 +414,59 @@ func redisClientAs(t *testing.T, user, pass string) *goredis.Client {
 	opts.Password = pass
 	return goredis.NewClient(opts)
 }
+
+// TestRevokeWithRedisRefusingEveryWriteStopsTrustingTheCache covers the state
+// left after the sentinel: Redis refuses DEL *and* SET, so no revocation can be
+// recorded in it at all.
+//
+// The revoke still reports success — Clerk holds the key list and the key is
+// genuinely gone from it — but this process must not keep answering the revoked
+// key from a cache it can no longer write to. The eviction suspends cache reads
+// for a cool-down, which is the only place the fact can live when the write path
+// is the thing that failed.
+func TestRevokeWithRedisRefusingEveryWriteStopsTrustingTheCache(t *testing.T) {
+	_, userA, _, keyA, _ := clerkFixtures(t)
+	admin := projredis.GetClient()
+	if admin == nil {
+		t.Fatal("no redis client installed")
+	}
+	// This test trips a process-wide window; leave it cleared for the others.
+	t.Cleanup(func() { apiKeyCacheBrokenUntil.Store(0) })
+	ctx := context.Background()
+
+	if got, err := LookupUserByAPIKey(keyA); err != nil || got != userA {
+		t.Fatalf("warm key A = (%q, %v), want (%q, nil)", got, err, userA)
+	}
+
+	user := "apikey-nowrite-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	pass := "pw-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	if err := admin.Do(ctx, "ACL", "SETUSER", user, "on", ">"+pass, "~*", "+@all", "-del", "-set").Err(); err != nil {
+		t.Skipf("cannot create an ACL user on this Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Do(context.Background(), "ACL", "DELUSER", user).Err() })
+
+	restricted := redisClientAs(t, user, pass)
+	t.Cleanup(func() { _ = restricted.Close() })
+	if err := restricted.Ping(ctx).Err(); err != nil {
+		t.Skipf("the restricted Redis user cannot connect: %v", err)
+	}
+	// The premise: reads work, writes do not, so nothing can record the revoke.
+	if err := restricted.Set(ctx, "probe", "v", time.Minute).Err(); err == nil {
+		t.Fatal("the restricted user CAN write — the test would prove nothing")
+	}
+	projredis.SetClientForTest(t, restricted)
+
+	if err := revokeClerkAPIKey(userA, "key-a"); err != nil {
+		t.Fatalf("the Clerk half of the revoke must still succeed: %v", err)
+	}
+
+	// The stale entry is still in Redis — it could not be deleted or overwritten.
+	if got := clientGet(t, admin, apiKeyCacheKey(hashAPIKey(keyA))); got != userA {
+		t.Fatalf("entry = %q, want the stale %q for the degraded state to be the one under test", got, userA)
+	}
+	// And the revoked key still does not authenticate: this process has stopped
+	// reading a cache it cannot write to.
+	if got, err := LookupUserByAPIKey(keyA); err == nil {
+		t.Fatalf("the revoked key still authenticated as %q — a Redis that refuses every write left it usable", got)
+	}
+}
