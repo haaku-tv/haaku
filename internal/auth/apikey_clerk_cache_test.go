@@ -162,14 +162,29 @@ func testRedis(t *testing.T) *goredis.Client {
 	if err := client.Ping(ctx).Err(); err != nil {
 		t.Skipf("redis unavailable: %v", err)
 	}
-	// The cleanup flushes the database, so refuse to run unless it is empty:
-	// REDIS_URL may point at a shared instance where DB 15 holds someone
-	// else's data, and a test must not delete state it did not create.
-	if n, err := client.DBSize(ctx).Result(); err != nil || n != 0 {
-		t.Skipf("redis DB %d is not empty or unreadable (size=%d, err=%v); refusing to flush it", opts.DB, n, err)
-	}
-	t.Cleanup(func() { _ = client.FlushDB(context.Background()).Err() })
 	return client
+}
+
+// deleteAPIKeyCache removes the cache entries the given fixture keys can have
+// written, at the start of a test and again on cleanup.
+//
+// It deletes EXACTLY those entries and never flushes the database: REDIS_URL may
+// point at a shared instance, where a FlushDB (or a sweep of apikey:*) destroys
+// state this test did not create. Deleting first as well as last means a stale
+// entry from a crashed earlier run cannot make a "still warm" assertion pass for
+// the wrong reason.
+func deleteAPIKeyCache(t *testing.T, rdb *goredis.Client, keys ...string) {
+	t.Helper()
+	if rdb == nil {
+		t.Fatal("no redis client installed")
+	}
+	drop := func() {
+		for _, k := range keys {
+			_ = rdb.Del(context.Background(), apiKeyCacheKey(hashAPIKey(k))).Err()
+		}
+	}
+	drop()
+	t.Cleanup(drop)
 }
 
 // clerkFixtures puts the package in clerk mode against a fake Clerk and returns
@@ -218,6 +233,10 @@ func clerkFixtures(t *testing.T) (*fakeClerk, string, string, string, string) {
 		ID: "key-b", Prefix: keyB[:fixturePrefixLen], KeyHash: hashAPIKey(keyB),
 		Name: "beta", CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+
+	// The only cache entries these fixtures can write are the two for the keys
+	// above; delete them rather than the database they live in.
+	deleteAPIKeyCache(t, client, keyA, keyB)
 
 	return clerk, userA, userB, keyA, keyB
 }
@@ -284,6 +303,8 @@ func TestClerkAPIKeyRevokeLeavesOtherKeysOfTheSameAccountWarm(t *testing.T) {
 	clerk, userA, _, keyA, _ := clerkFixtures(t)
 
 	secondKey := "tk_" + strings.Repeat("b", 7) + strings.Repeat("3", 57)
+	// This test writes one cache entry the shared fixtures do not cover.
+	deleteAPIKeyCache(t, projredis.GetClient(), secondKey)
 	clerk.seed(userA,
 		APIKeyEntry{ID: "key-a", Prefix: keyA[:fixturePrefixLen], KeyHash: hashAPIKey(keyA), Name: "a"},
 		APIKeyEntry{ID: "key-a2", Prefix: secondKey[:fixturePrefixLen], KeyHash: hashAPIKey(secondKey), Name: "a2"},
