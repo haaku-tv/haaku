@@ -22260,6 +22260,12 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: unauthorized
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorEnvelope'
+                    description: API key callers may not manage keys
                 "404":
                     content:
                         application/json:
@@ -22293,7 +22299,7 @@ paths:
             security:
                 - apiKey: []
                 - oauth: []
-            summary: Generate a new API key
+            summary: Generate a new API key (session credential only — an API key cannot mint another)
             tags:
                 - API Keys
     /v1/users/me/api_keys/{key_id}:
@@ -22314,6 +22320,12 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: unauthorized
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorEnvelope'
+                    description: API key callers may not manage keys
                 "404":
                     content:
                         application/json:
@@ -22347,7 +22359,7 @@ paths:
             security:
                 - apiKey: []
                 - oauth: []
-            summary: Revoke an API key
+            summary: Revoke an API key (session credential only — an API key cannot revoke keys)
             tags:
                 - API Keys
     /v1/users/me/export:

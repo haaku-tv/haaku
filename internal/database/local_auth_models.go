@@ -49,6 +49,23 @@ type LocalSession struct {
 
 func (LocalSession) TableName() string { return "local_sessions" }
 
+// APIKey is one `tk_` bearer credential minted by this server for a local
+// account (issue #92). KeyHash is the HMAC blind index of the raw key under an
+// HKDF-derived lookup key — the raw key is returned once at creation and is not
+// recoverable from this row. A Clerk deployment keeps its keys in Clerk instead
+// and never writes this table.
+type APIKey struct {
+	ID         string     `gorm:"primaryKey;type:text" json:"id"`
+	UserID     string     `gorm:"type:text;not null;index" json:"user_id"`
+	Prefix     string     `gorm:"type:text;not null" json:"prefix"`
+	KeyHash    string     `gorm:"type:text;not null;uniqueIndex" json:"-"`
+	Name       string     `gorm:"type:text;not null;default:''" json:"name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+}
+
+func (APIKey) TableName() string { return "api_keys" }
+
 // LocalAuthToken is a one-time token an admin issues and hands to a user
 // (password reset). ConsumedAt makes redemption single-use.
 type LocalAuthToken struct {
