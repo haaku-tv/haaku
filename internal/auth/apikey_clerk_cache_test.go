@@ -162,6 +162,12 @@ func testRedis(t *testing.T) *goredis.Client {
 	if err := client.Ping(ctx).Err(); err != nil {
 		t.Skipf("redis unavailable: %v", err)
 	}
+	// The cleanup flushes the database, so refuse to run unless it is empty:
+	// REDIS_URL may point at a shared instance where DB 15 holds someone
+	// else's data, and a test must not delete state it did not create.
+	if n, err := client.DBSize(ctx).Result(); err != nil || n != 0 {
+		t.Skipf("redis DB %d is not empty or unreadable (size=%d, err=%v); refusing to flush it", opts.DB, n, err)
+	}
 	t.Cleanup(func() { _ = client.FlushDB(context.Background()).Err() })
 	return client
 }
