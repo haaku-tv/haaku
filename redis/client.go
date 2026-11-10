@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -73,6 +74,24 @@ func getRedisDB() int {
 // GetClient returns the Redis client singleton, or nil if not initialized.
 func GetClient() *redis.Client {
 	return rdb
+}
+
+// SetClientForTest installs c as the package-level client for the duration of a
+// test and restores the previous singleton on cleanup.
+//
+// It is the Redis analogue of database.SetDBForTest. InitRedis initializes the
+// singleton exactly once (sync.Once), so a test that needs its own database
+// number — or that runs after another test closed the shared connection — cannot
+// get there by calling InitRedis, and the alternative is an ordering dependency
+// between test files.
+//
+// Do NOT call this from production code paths. It is not safe to call
+// concurrently with InitRedis/CloseRedis.
+func SetClientForTest(tb testing.TB, c *redis.Client) {
+	tb.Helper()
+	prev := rdb
+	rdb = c
+	tb.Cleanup(func() { rdb = prev })
 }
 
 // CloseRedis shuts down the Redis connection.

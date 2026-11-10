@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -292,14 +293,9 @@ func handleRevokeAPIKey(c *fiber.Ctx) error {
 		return revokeLocalAPIKeyResponse(c, userID, keyID)
 	}
 
-	if err := removeAPIKeyFromClerk(userID, keyID); err != nil {
+	if err := revokeClerkAPIKey(userID, keyID); err != nil {
 		log.Printf("[apikey] failed to revoke API key from Clerk: %v", err)
 		return apiInternalError(c, "failed to revoke API key")
-	}
-
-	// Invalidate Redis cache for all prefixes associated with this user
-	if err := invalidateAPIKeyCacheForUser(userID); err != nil {
-		log.Printf("[apikey] failed to invalidate cache for user %s: %v", userID, err)
 	}
 
 	return c.JSON(fiber.Map{"status": "revoked"})
@@ -321,6 +317,26 @@ func revokeLocalAPIKeyResponse(c *fiber.Ctx, userID, keyID string) error {
 		return apiInternalError(c, "failed to revoke API key")
 	}
 	return c.JSON(fiber.Map{"status": "revoked"})
+}
+
+// revokeClerkAPIKey removes the key from Clerk and evicts that key's own cache
+// entry.
+//
+// The eviction has to be the removed key's, not the account's remaining ones:
+// LookupUserByAPIKey answers a Redis hit without ever calling Clerk, so an entry
+// that survives a revoke is a credential that keeps authenticating for the rest
+// of its TTL (1h) — the one thing DELETE exists to prevent.
+func revokeClerkAPIKey(userID, keyID string) error {
+	removed, err := removeAPIKeyFromClerk(userID, keyID)
+	if err != nil {
+		return err
+	}
+	if removed.KeyHash != "" {
+		if err := evictAPIKeyCache(removed.KeyHash); err != nil {
+			log.Printf("[apikey] failed to evict cache for revoked key %s: %v", removed.ID, err)
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -355,8 +371,15 @@ func LookupUserByAPIKey(key string) (string, error) {
 	keyHash := hashAPIKey(apiKeyPrefix + strippedKey)
 	prefix := key[:apiKeyDisplayLen] // tk_ + first 6 hex chars
 
+	// A key whose eviction this process could NOT record in Redis is denied
+	// outright: the entry it left behind is known to be stale, and a cache hit is
+	// answered without ever consulting Clerk (see evictAPIKeyCache).
+	if apiKeyEvictionFailed(keyHash) {
+		return "", fmt.Errorf("api key not found")
+	}
+
 	// Try Redis cache first
-	cacheKey := apiKeyRedisPrefix + prefix
+	cacheKey := apiKeyCacheKey(keyHash)
 	rdb := tredis.GetClient()
 	if rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -502,28 +525,34 @@ func addAPIKeyToClerk(userID string, entry *APIKeyEntry) error {
 	return updateClerkAPIKeys(userID, existing)
 }
 
-// removeAPIKeyFromClerk removes an API key entry from Clerk user metadata by ID.
-func removeAPIKeyFromClerk(userID, keyID string) error {
+// removeAPIKeyFromClerk removes an API key entry from Clerk user metadata by ID
+// and returns the entry it removed, so the caller can evict that key's own cache
+// entry (see revokeClerkAPIKey).
+func removeAPIKeyFromClerk(userID, keyID string) (*APIKeyEntry, error) {
 	existing, err := getAPIKeysFromClerk(userID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch existing keys: %w", err)
+		return nil, fmt.Errorf("failed to fetch existing keys: %w", err)
 	}
 
 	var filtered []APIKeyEntry
-	found := false
+	var removed *APIKeyEntry
 	for _, k := range existing {
 		if k.ID == keyID {
-			found = true
+			entry := k
+			removed = &entry
 			continue
 		}
 		filtered = append(filtered, k)
 	}
 
-	if !found {
-		return fmt.Errorf("key %s not found for user %s", keyID, userID)
+	if removed == nil {
+		return nil, fmt.Errorf("key %s not found for user %s", keyID, userID)
 	}
 
-	return updateClerkAPIKeys(userID, filtered)
+	if err := updateClerkAPIKeys(userID, filtered); err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
 
 // updateClerkAPIKeys writes the api_keys array to Clerk user metadata.
@@ -649,25 +678,71 @@ func lookupUserByKeyInClerk(prefix, keyHash string) (string, error) {
 	return "", nil
 }
 
-// invalidateAPIKeyCacheForUser clears Redis cache entries for a user's API keys.
-func invalidateAPIKeyCacheForUser(userID string) error {
-	rdb := tredis.GetClient()
-	if rdb == nil {
-		return nil
-	}
+// apiKeyCacheKey is the Redis key for a resolved API key.
+//
+// It is derived from the FULL key hash, never from the display prefix. The prefix
+// is ten characters of a sixty-seven-character key, so two keys can share one —
+// and because a cache hit is answered without consulting Clerk at all, a
+// prefix-keyed entry would resolve one key to another account's user id for the
+// entry's whole TTL.
+func apiKeyCacheKey(keyHash string) string { return apiKeyRedisPrefix + keyHash }
 
-	keys, err := getAPIKeysFromClerk(userID)
-	if err != nil {
-		return err
+// evictAPIKeyCache drops the cache entry for one key hash. It is fail-open: a
+// Redis error must not fail a revoke that has already removed the key from Clerk,
+// so the caller logs it and the entry expires with its TTL instead.
+//
+// "Fail-open" is bounded, though: a DEL that Redis REFUSES (an ACL that allows
+// GET and SET but not DEL, say) would leave the entry live, and a cache hit is
+// answered without consulting Clerk — so the revoked key would keep
+// authenticating for the rest of its TTL. The eviction therefore overwrites the
+// entry with the empty sentinel when the delete fails, which
+// LookupUserByAPIKey treats as a miss, so the next use re-consults Clerk and
+// finds nothing.
+//
+// If Redis refuses BOTH the delete and the sentinel write, no revocation can be
+// recorded in it at all, so the key hash joins apiKeyEvictionFailures and every
+// later lookup for it fails closed in this process. What remains uncovered is a
+// process that never attempted the eviction — see that variable.
+func evictAPIKeyCache(keyHash string) error {
+	rdb := tredis.GetClient()
+	if rdb == nil || keyHash == "" {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	for _, k := range keys {
-		cacheKey := apiKeyRedisPrefix + k.Prefix
-		rdb.Del(ctx, cacheKey)
+	cacheKey := apiKeyCacheKey(keyHash)
+	if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+		if setErr := rdb.Set(ctx, cacheKey, "", apiKeyCacheTTL).Err(); setErr != nil {
+			markAPIKeyEvictionFailed(keyHash)
+			return err
+		}
 	}
-
 	return nil
+}
+
+// apiKeyEvictionFailures records the key hashes whose cache entry this process
+// could not neutralise, because Redis refused both the delete and the sentinel
+// write.
+//
+// The fact has to live here: recording it in Redis is exactly what failed. It is
+// precise (the failed eviction names the stale entry) and it does not expire —
+// a cool-down would let the same process start trusting that entry again once it
+// elapsed, which is the hole this closes. A lookup for one of these hashes fails
+// closed instead of reading a cache the process knows is stale.
+//
+// What it cannot cover is a process that never attempted the eviction: a restart,
+// or another instance, still serves the stale entry until its TTL expires. The
+// ways to close that are to fail the revoke request when the entry cannot be
+// neutralised, or to shorten apiKeyCacheTTL — policy, not a bug fix.
+var apiKeyEvictionFailures sync.Map // map[string]struct{}
+
+func markAPIKeyEvictionFailed(keyHash string) {
+	apiKeyEvictionFailures.Store(keyHash, struct{}{})
+}
+
+func apiKeyEvictionFailed(keyHash string) bool {
+	_, failed := apiKeyEvictionFailures.Load(keyHash)
+	return failed
 }
