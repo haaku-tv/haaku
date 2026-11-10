@@ -82,6 +82,7 @@ var mediaImageKeySet = map[string][]string{
 	"season":  {"poster", "thumb"},
 	"episode": {"screenshot"},
 	"person":  {"headshot", "fanart"},
+	"list":    {"posters"},
 }
 
 // TestMediaImagesCarryEveryRequiredKey is the #140 acceptance test: every media
@@ -104,6 +105,7 @@ func TestMediaImagesCarryEveryRequiredKey(t *testing.T) {
 		{name: "season with nothing stored", kind: "season"},
 		{name: "episode with nothing stored", kind: "episode"},
 		{name: "person with nothing stored", kind: "person"},
+		{name: "list with nothing stored", kind: "list"},
 		{
 			name:   "movie resolves poster and maps backdrop onto fanart",
 			kind:   "movie",
@@ -130,6 +132,12 @@ func TestMediaImagesCarryEveryRequiredKey(t *testing.T) {
 			kind:   "person",
 			stored: database.JSONMap{"profile_path": "/who.jpg"},
 			expect: map[string][]string{"headshot": {"https://image.tmdb.org/t/p/w500/who.jpg"}},
+		},
+		{
+			name:   "list resolves its cover URL onto the plural posters key",
+			kind:   "list",
+			stored: database.JSONMap{"posters": []any{"https://example.test/cover.jpg"}},
+			expect: map[string][]string{"posters": {"https://example.test/cover.jpg"}},
 		},
 		{
 			name:   "a stored array round-tripped through JSONB is preserved",
@@ -175,5 +183,29 @@ func TestMediaImagesCarryEveryRequiredKey(t *testing.T) {
 				t.Errorf("images marshalled with a null value: %s", encoded)
 			}
 		})
+	}
+}
+
+// TestListImagesUseThePluralRequiredKey pins the list object's images shape.
+// The contract declares exactly one key there, `posters`, and marks it required;
+// the list builders emitted `poster` (a key the contract does not declare for a
+// list) and omitted `posters`, so POST /users/{id}/lists failed conformance with
+// `$.images.posters: missing required field`.
+func TestListImagesUseThePluralRequiredKey(t *testing.T) {
+	empty := ListImages("")
+	if _, ok := empty["posters"]; !ok {
+		t.Fatalf("list images = %v, want a posters key", empty)
+	}
+	if len(empty) != 1 {
+		t.Errorf("list images has %d keys, want exactly posters: %v", len(empty), empty)
+	}
+	if _, ok := empty["poster"]; ok {
+		t.Errorf("list images carries a singular poster key, which the contract does not declare for a list")
+	}
+
+	covered := ListImages("https://example.test/cover.jpg")
+	got, ok := covered["posters"].([]string)
+	if !ok || len(got) != 1 || got[0] != "https://example.test/cover.jpg" {
+		t.Errorf("list images.posters = %v, want the cover URL", covered["posters"])
 	}
 }

@@ -162,10 +162,7 @@ func contractListItems(db *gorm.DB, lists []database.List) ([]map[string]any, er
 
 // contractList renders one list in the contract's shape.
 func contractList(l *database.List, user *database.User, itemCount int64) map[string]any {
-	images := map[string]any{}
-	if l.CoverURL != "" {
-		images["poster"] = []string{l.CoverURL}
-	}
+	images := contractshape.ListImages(l.CoverURL)
 	return map[string]any{
 		"name":            l.Name,
 		"description":     contractshape.NullableString(l.Description),

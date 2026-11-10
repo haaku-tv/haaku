@@ -66,7 +66,7 @@ func contractSmartListObject(sl *database.SmartList) map[string]any {
 		"created_at": contractshape.Timestamp(sl.CreatedAt),
 		"updated_at": contractshape.Timestamp(sl.UpdatedAt),
 		"ids":        map[string]any{"trakt": sl.ID, "slug": "smart-list-" + strconv.FormatInt(sl.ID, 10)},
-		"images":     map[string]any{"posters": []string{}},
+		"images":     contractshape.ListImages(""),
 		"source":     source,
 		"media_type": mediaType,
 		"filters":    filters,

@@ -170,6 +170,9 @@ var mediaImageKeys = map[string][]string{
 	"season":  {"poster", "thumb"},
 	"episode": {"screenshot"},
 	"person":  {"headshot", "fanart"},
+	// A list object's images carry a single required key, plural. It has its own
+	// entry because the name differs from the media objects' singular `poster`.
+	"list": {"posters"},
 }
 
 // imageAliases points a contract key at every store key the same image may hide
@@ -187,6 +190,7 @@ var imageAliases = map[string][]string{
 	"poster":     {"poster", "poster_path", "tvdb_poster"},
 	"screenshot": {"screenshot", "still", "still_url", "poster", "still_path"},
 	"headshot":   {"headshot", "profile_path"},
+	"posters":    {"posters", "poster"},
 }
 
 // imageSizes picks the CDN width for a key that holds a bare TMDB path.
@@ -195,6 +199,7 @@ var imageSizes = map[string]string{
 	"fanart":     tmdb.ImageSizeBackdrop,
 	"screenshot": tmdb.ImageSizeStill,
 	"headshot":   tmdb.ImageSizePoster,
+	"posters":    tmdb.ImageSizePoster,
 }
 
 // MediaImages renders one media type's contract images object: every required
@@ -209,6 +214,19 @@ func MediaImages(kind string, stored database.JSONMap) map[string]any {
 		out[key] = imageValuesFor(key, stored)
 	}
 	return out
+}
+
+// ListImages renders the contract's list images object. It has exactly one
+// required key, `posters` (plural), and a list's single image is its CoverURL.
+// The list builders used to emit `poster` — a key the contract does not declare
+// there — and omit `posters`, which is the required one, so the create-list
+// response failed with `$.images.posters: missing required field`.
+func ListImages(coverURL string) map[string]any {
+	stored := database.JSONMap{}
+	if coverURL != "" {
+		stored["posters"] = []string{coverURL}
+	}
+	return MediaImages("list", stored)
 }
 
 // imageValuesFor resolves one required key, trying its aliases in order and
@@ -527,10 +545,7 @@ func List(l *database.List, user *database.User) map[string]any {
 // that have the count (a grouped list_items query) use this rather than emitting
 // the contract's required item_count as a fabricated zero.
 func ListWithItemCount(l *database.List, user *database.User, itemCount int64) map[string]any {
-	images := map[string]any{}
-	if l.CoverURL != "" {
-		images["poster"] = []string{l.CoverURL}
-	}
+	images := ListImages(l.CoverURL)
 	return map[string]any{
 		"name":            l.Name,
 		"description":     NullableString(l.Description),
