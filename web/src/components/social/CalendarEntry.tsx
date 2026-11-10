@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Calendar, Clock } from 'lucide-react'
 import type { CalendarEpisode } from '@/api/hooks/useCalendar'
 import { activateOnKey } from '@/lib/a11y'
+import { firstImage } from '@/lib/images'
 import { cn } from '@/lib/utils'
 
 interface CalendarEntryProps {
@@ -25,6 +26,7 @@ export function CalendarEntry({ item, className }: CalendarEntryProps) {
           : null
 
   const episodeStr = `S${String(episode.season).padStart(2, '0')}E${String(episode.number).padStart(2, '0')}`
+  const poster = firstImage(show.images, 'poster')
 
   return (
     <div
@@ -39,9 +41,9 @@ export function CalendarEntry({ item, className }: CalendarEntryProps) {
     >
       {/* Show poster thumbnail */}
       <div className="h-14 w-10 shrink-0 overflow-hidden rounded">
-        {show.images?.poster ? (
+        {poster ? (
           <img
-            src={show.images.poster}
+            src={poster}
             alt={show.title}
             className="h-full w-full object-cover"
           />

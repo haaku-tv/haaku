@@ -30,12 +30,34 @@ export interface Ids {
   id?: number
 }
 
+export type ImageURLs = string | string[] | null
+
+/**
+ * ImageSet is a media object's `images`, keyed by the contract's own names.
+ *
+ * The contract types every image field as an ARRAY of URLs and the media
+ * endpoints serve exactly that: every key of the media type present, absent data
+ * as an empty array, the object itself nullable. A scalar is still accepted
+ * because a stored row can hold one, so read the set through firstImage() rather
+ * than reaching for a field.
+ *
+ * The name differs per type — a movie, show or season carries `fanart` (its
+ * backdrop), an episode carries `screenshot` (its still) and a person carries
+ * `headshot` — which is why the fallbacks are spelled out at each call site.
+ */
 export interface ImageSet {
-  poster?: string
-  backdrop?: string
-  headshot?: string
-  logo?: string
-  thumb?: string
+  fanart?: ImageURLs
+  poster?: ImageURLs
+  logo?: ImageURLs
+  clearart?: ImageURLs
+  banner?: ImageURLs
+  thumb?: ImageURLs
+  screenshot?: ImageURLs
+  headshot?: ImageURLs
+  /** posters is the plural key a list object's images carries. */
+  posters?: ImageURLs
+  /** backdrop is the stored name for fanart; rows written before the shapes were normalised still hold it. */
+  backdrop?: ImageURLs
 }
 
 // ─── Media ────────────────────────────────────────────────────────────

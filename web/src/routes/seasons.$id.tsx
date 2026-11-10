@@ -12,6 +12,7 @@ import {
   StatCard,
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
+import { episodeStill, firstImage } from '@/lib/images'
 import { formatDate } from '@/lib/utils'
 
 export const Route = createFileRoute('/seasons/$id')({
@@ -59,7 +60,7 @@ function SeasonDetailPage() {
         eyebrow={`Season ${season.number}`}
         title={season.title ?? `Season ${season.number}`}
         subtitle={season.overview}
-        image={season.images?.backdrop ?? season.images?.poster}
+        image={firstImage(season.images, 'fanart', 'poster')}
       />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -111,9 +112,9 @@ function SeasonDetailPage() {
                 onKeyDown={activateOnKey}
               >
                 <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-sf-sm bg-sf-bg-3">
-                  {ep.images?.poster ? (
+                  {episodeStill(ep.images) ? (
                     <img
-                      src={ep.images.poster}
+                      src={episodeStill(ep.images)}
                       alt={ep.title}
                       className="h-full w-full object-cover"
                       loading="lazy"
