@@ -2,8 +2,10 @@ package discovery
 
 import (
 	"context"
+	"io"
 	"os"
 	"testing"
+	"time"
 
 	projredis "github.com/haaku-tv/haaku/redis"
 )
@@ -72,5 +74,53 @@ func TestWarmCacheStillCarriesPaginationHeaders(t *testing.T) {
 	}
 	if warmCount == "" {
 		t.Errorf("warm response had no X-Pagination-Items-Count")
+	}
+}
+
+// TestEnvelopeWithoutABodyIsAMiss covers the other half of the cache contract: an
+// entry that unmarshals but carries no body must be treated as a miss. Answering
+// 200 with an empty body is worse than a cache miss, and the old body-only
+// format made that reachable.
+func TestEnvelopeWithoutABodyIsAMiss(t *testing.T) {
+	if os.Getenv("REDIS_URL") == "" {
+		t.Skip("REDIS_URL not set — the cache-replay test needs a real Redis")
+	}
+	if err := projredis.InitRedis(); err != nil {
+		t.Fatalf("redis: %v", err)
+	}
+	client := projredis.GetClient()
+	if client == nil {
+		t.Fatal("redis client is nil after a successful InitRedis")
+	}
+	ctx := context.Background()
+	if keys, err := client.Keys(ctx, "rankings:*").Result(); err == nil && len(keys) > 0 {
+		_ = client.Del(ctx, keys...).Err()
+	}
+
+	db := setupRankingsDB(t)
+	seedMovieRankingData(t, db)
+	app := rankingsApp()
+
+	// A well-formed envelope with no body, under the key the handler will read.
+	bodyless := []byte(`{"page":1,"limit":2,"total":9,"items":9}`)
+	if err := projredis.SetCacheData("rankings:hot:movie:page1:limit2", bodyless, time.Minute); err != nil {
+		t.Fatalf("prime cache: %v", err)
+	}
+
+	resp := getRankings(t, app, "/v1/movies/hot?limit=2")
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		t.Fatalf("body = %q, want the recomputed listing — a bodyless entry must be a miss, not an empty 200", raw)
+	}
+	// The recomputed answer must describe the real data, not the poisoned envelope.
+	if got := resp.Header.Get("X-Pagination-Total-Items"); got == "9" {
+		t.Errorf("X-Pagination-Total-Items = %q, want the recomputed value, not the bodyless entry's", got)
 	}
 }

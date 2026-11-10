@@ -213,9 +213,10 @@ func discoveryGetListing(c *fiber.Ctx, key string) bool {
 		return false
 	}
 	var listing cachedListing
-	if err := json.Unmarshal(data, &listing); err != nil {
-		// An entry written by the old body-only shape is unusable; treat it as a
-		// miss so the next request recomputes and rewrites it.
+	if err := json.Unmarshal(data, &listing); err != nil || len(listing.Body) == 0 {
+		// An entry written by the old body-only shape, or one with no body, is
+		// unusable: treat it as a miss so the next request recomputes and
+		// rewrites it rather than answering 200 with an empty body.
 		return false
 	}
 	response.SetPaginationHeaders(c, listing.Page, listing.Limit, listing.Total, listing.Items)

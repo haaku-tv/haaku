@@ -11,6 +11,7 @@ package contractshape
 import (
 	"hash/fnv"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/haaku-tv/haaku/external/tmdb"
@@ -193,6 +194,13 @@ var imageAliases = map[string][]string{
 	"posters":    {"posters", "poster"},
 }
 
+// imageVerbatim marks keys whose stored value is ALREADY the URL to serve and
+// must not be joined to a provider CDN. A list's cover_url is a native upload
+// path such as /uploads/cover.jpg; running it through tmdb.ImageURL would
+// rewrite it to image.tmdb.org/t/p/w500/uploads/cover.jpg and point every client
+// at a 404 on someone else's CDN.
+var imageVerbatim = map[string]bool{"posters": true}
+
 // imageSizes picks the CDN width for a key that holds a bare TMDB path.
 var imageSizes = map[string]string{
 	"poster":     tmdb.ImageSizePoster,
@@ -244,7 +252,7 @@ func imageValuesFor(key string, stored database.JSONMap) []string {
 			if !ok {
 				continue
 			}
-			if values := imageURLs(raw, imageSizes[key]); len(values) > 0 {
+			if values := imageURLs(raw, imageSizes[key], !imageVerbatim[key]); len(values) > 0 {
 				return values
 			}
 		}
@@ -253,17 +261,25 @@ func imageValuesFor(key string, stored database.JSONMap) []string {
 }
 
 // imageURLs normalises a stored value (scalar path, []string, or the []any a
-// JSONB round-trip produces) into absolute URL strings.
-func imageURLs(raw any, size string) []string {
+// JSONB round-trip produces) into URL strings. convert joins a bare provider
+// path to the image CDN; with it off the stored value is served verbatim, which
+// is what a key holding an already-final URL needs.
+func imageURLs(raw any, size string, convert bool) []string {
+	url := func(s string) string {
+		if !convert {
+			return strings.TrimSpace(s)
+		}
+		return tmdb.ImageURL(s, size)
+	}
 	switch v := raw.(type) {
 	case string:
-		if u := tmdb.ImageURL(v, size); u != "" {
+		if u := url(v); u != "" {
 			return []string{u}
 		}
 	case []string:
 		out := make([]string, 0, len(v))
 		for _, s := range v {
-			if u := tmdb.ImageURL(s, size); u != "" {
+			if u := url(s); u != "" {
 				out = append(out, u)
 			}
 		}
@@ -272,7 +288,7 @@ func imageURLs(raw any, size string) []string {
 		out := make([]string, 0, len(v))
 		for _, entry := range v {
 			if s, ok := entry.(string); ok {
-				if u := tmdb.ImageURL(s, size); u != "" {
+				if u := url(s); u != "" {
 					out = append(out, u)
 				}
 			}

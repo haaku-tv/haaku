@@ -209,3 +209,31 @@ func TestListImagesUseThePluralRequiredKey(t *testing.T) {
 		t.Errorf("list images.posters = %v, want the cover URL", covered["posters"])
 	}
 }
+
+// TestListImagesKeepANonTMDBCoverPathVerbatim guards a regression introduced
+// while building this shape: a list's cover_url is a native upload path such as
+// "/uploads/cover.jpg", NOT a TMDB path. Routing it through tmdb.ImageURL
+// rewrote it to image.tmdb.org/t/p/w500/uploads/cover.jpg, pointing every client
+// at a 404 on someone else's CDN. Media keys still convert; only keys whose
+// stored value is already the final URL (posters) are served verbatim.
+func TestListImagesKeepANonTMDBCoverPathVerbatim(t *testing.T) {
+	for _, cover := range []string{"/uploads/cover.jpg", "https://haaku.test/c/1.jpg"} {
+		got, ok := ListImages(cover)["posters"].([]string)
+		if !ok || len(got) != 1 {
+			t.Fatalf("posters = %v, want one entry for %q", ListImages(cover)["posters"], cover)
+		}
+		if got[0] != cover {
+			t.Errorf("posters[0] = %q, want %q served verbatim", got[0], cover)
+		}
+	}
+}
+
+// TestMediaImagesStillConvertBareTMPaths is the other half: the media keys must
+// keep joining a bare TMDB path, so the verbatim rule cannot be applied wholesale.
+func TestMediaImagesStillConvertBareTMPaths(t *testing.T) {
+	got := MediaImages("movie", database.JSONMap{"poster_path": "/abc.jpg"})
+	poster, _ := got["poster"].([]string)
+	if len(poster) != 1 || poster[0] != "https://image.tmdb.org/t/p/w500/abc.jpg" {
+		t.Errorf("movie images.poster = %v, want the joined TMDB URL", got["poster"])
+	}
+}
