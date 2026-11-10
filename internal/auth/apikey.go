@@ -292,14 +292,9 @@ func handleRevokeAPIKey(c *fiber.Ctx) error {
 		return revokeLocalAPIKeyResponse(c, userID, keyID)
 	}
 
-	if err := removeAPIKeyFromClerk(userID, keyID); err != nil {
+	if err := revokeClerkAPIKey(userID, keyID); err != nil {
 		log.Printf("[apikey] failed to revoke API key from Clerk: %v", err)
 		return apiInternalError(c, "failed to revoke API key")
-	}
-
-	// Invalidate Redis cache for all prefixes associated with this user
-	if err := invalidateAPIKeyCacheForUser(userID); err != nil {
-		log.Printf("[apikey] failed to invalidate cache for user %s: %v", userID, err)
 	}
 
 	return c.JSON(fiber.Map{"status": "revoked"})
@@ -321,6 +316,26 @@ func revokeLocalAPIKeyResponse(c *fiber.Ctx, userID, keyID string) error {
 		return apiInternalError(c, "failed to revoke API key")
 	}
 	return c.JSON(fiber.Map{"status": "revoked"})
+}
+
+// revokeClerkAPIKey removes the key from Clerk and evicts that key's own cache
+// entry.
+//
+// The eviction has to be the removed key's, not the account's remaining ones:
+// LookupUserByAPIKey answers a Redis hit without ever calling Clerk, so an entry
+// that survives a revoke is a credential that keeps authenticating for the rest
+// of its TTL (1h) — the one thing DELETE exists to prevent.
+func revokeClerkAPIKey(userID, keyID string) error {
+	removed, err := removeAPIKeyFromClerk(userID, keyID)
+	if err != nil {
+		return err
+	}
+	if removed.KeyHash != "" {
+		if err := evictAPIKeyCache(removed.KeyHash); err != nil {
+			log.Printf("[apikey] failed to evict cache for revoked key %s: %v", removed.ID, err)
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -356,7 +371,7 @@ func LookupUserByAPIKey(key string) (string, error) {
 	prefix := key[:apiKeyDisplayLen] // tk_ + first 6 hex chars
 
 	// Try Redis cache first
-	cacheKey := apiKeyRedisPrefix + prefix
+	cacheKey := apiKeyCacheKey(keyHash)
 	rdb := tredis.GetClient()
 	if rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -502,28 +517,34 @@ func addAPIKeyToClerk(userID string, entry *APIKeyEntry) error {
 	return updateClerkAPIKeys(userID, existing)
 }
 
-// removeAPIKeyFromClerk removes an API key entry from Clerk user metadata by ID.
-func removeAPIKeyFromClerk(userID, keyID string) error {
+// removeAPIKeyFromClerk removes an API key entry from Clerk user metadata by ID
+// and returns the entry it removed, so the caller can evict that key's own cache
+// entry (see revokeClerkAPIKey).
+func removeAPIKeyFromClerk(userID, keyID string) (*APIKeyEntry, error) {
 	existing, err := getAPIKeysFromClerk(userID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch existing keys: %w", err)
+		return nil, fmt.Errorf("failed to fetch existing keys: %w", err)
 	}
 
 	var filtered []APIKeyEntry
-	found := false
+	var removed *APIKeyEntry
 	for _, k := range existing {
 		if k.ID == keyID {
-			found = true
+			entry := k
+			removed = &entry
 			continue
 		}
 		filtered = append(filtered, k)
 	}
 
-	if !found {
-		return fmt.Errorf("key %s not found for user %s", keyID, userID)
+	if removed == nil {
+		return nil, fmt.Errorf("key %s not found for user %s", keyID, userID)
 	}
 
-	return updateClerkAPIKeys(userID, filtered)
+	if err := updateClerkAPIKeys(userID, filtered); err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
 
 // updateClerkAPIKeys writes the api_keys array to Clerk user metadata.
@@ -649,25 +670,26 @@ func lookupUserByKeyInClerk(prefix, keyHash string) (string, error) {
 	return "", nil
 }
 
-// invalidateAPIKeyCacheForUser clears Redis cache entries for a user's API keys.
-func invalidateAPIKeyCacheForUser(userID string) error {
-	rdb := tredis.GetClient()
-	if rdb == nil {
-		return nil
-	}
+// apiKeyCacheKey is the Redis key for a resolved API key.
+//
+// It is derived from the FULL key hash, never from the display prefix. The prefix
+// is ten characters of a sixty-seven-character key, so two keys can share one —
+// and because a cache hit is answered without consulting Clerk at all, a
+// prefix-keyed entry would resolve one key to another account's user id for the
+// entry's whole TTL.
+func apiKeyCacheKey(keyHash string) string { return apiKeyRedisPrefix + keyHash }
 
-	keys, err := getAPIKeysFromClerk(userID)
-	if err != nil {
-		return err
+// evictAPIKeyCache drops the cache entry for one key hash. It is fail-open: a
+// Redis error must not fail a revoke that has already removed the key from Clerk,
+// so the caller logs it and the entry expires with its TTL instead.
+func evictAPIKeyCache(keyHash string) error {
+	rdb := tredis.GetClient()
+	if rdb == nil || keyHash == "" {
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	for _, k := range keys {
-		cacheKey := apiKeyRedisPrefix + k.Prefix
-		rdb.Del(ctx, cacheKey)
-	}
-
-	return nil
+	return rdb.Del(ctx, apiKeyCacheKey(keyHash)).Err()
 }
