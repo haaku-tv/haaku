@@ -104,3 +104,92 @@ func TestPathShadows(t *testing.T) {
 		}
 	}
 }
+
+// TestNoRouteIsRegisteredTwice is the guard for a second defect class that
+// TestNoStaticRouteIsShadowed cannot see: two packages registering the SAME
+// method+path.
+//
+// Fiber matches in registration order, so the first registration wins and the
+// second is dead code — and pathShadows explicitly returns false for a pattern
+// identical to the concrete path, because "a route shadowing itself" is not
+// shadowing. Nothing else looks at this: the OpenAPI registry happily accepts
+// both RouteDefs, so `make api-check` is green while one handler is unreachable.
+//
+// /shows/{id}/seasons/{season}/info was registered by BOTH seasons and tmdbmeta
+// (#142). They are not equivalent: the seasons copy can only answer from the
+// season row (null title/overview/TMDB id) while tmdbmeta serves the
+// provider-backed season detail, so which payload a client got depended on the
+// order of two lines in routes.go. Same shape as #137, where /watched/movies
+// shadowed /watched/:type with a different implementation.
+//
+// Fix by giving the path a single owner. Never delete this test to make room for
+// a second registration.
+func TestNoRouteIsRegisteredTwice(t *testing.T) {
+	app := fiber.New()
+	RegisterRoutes(app)
+
+	seen := map[string]bool{}
+	got := map[string]bool{}
+	total := 0
+	for _, r := range app.GetRoutes() {
+		if r.Path == "" || strings.Contains(r.Path, "*") {
+			continue
+		}
+		// Fiber mirrors every GET as a HEAD. Counting both doubles every finding
+		// without adding information, so the guard reads GET only.
+		if r.Method == fiber.MethodHead {
+			continue
+		}
+		total++
+		key := r.Method + " " + r.Path
+		if seen[key] {
+			got[key] = true
+			continue
+		}
+		seen[key] = true
+	}
+	if total == 0 {
+		t.Fatal("no routes registered — the test would pass vacuously")
+	}
+
+	// knownDuplicates is debt found when this guard was added, and it may only
+	// SHRINK (the same ratchet rule as tools/size-baseline.txt). Every entry is a
+	// path two packages register: media/contract_metadata.go and tmdbmeta both
+	// implement the #68 metadata surface, and media registers first, so tmdbmeta's
+	// copy is unreachable. Choosing which implementation owns each route changes
+	// the response (media serves the hydrated row and answers 502; tmdbmeta serves
+	// the media_metadata cache and answers 503), so it is a deliberate
+	// consolidation with its own conformance evidence, not a line to delete here —
+	// tracked as its own issue. The guard's job is that the list never grows.
+	//
+	// When you consolidate one, delete its line: this test fails on a stale entry
+	// as loudly as on a new duplicate.
+	knownDuplicates := map[string]bool{
+		"GET /v1/movies/:id/releases/:country":                             true,
+		"GET /v1/movies/:id/studios":                                       true,
+		"GET /v1/movies/:id/translations":                                  true,
+		"GET /v1/movies/:id/videos":                                        true,
+		"GET /v1/shows/:id/certifications":                                 true,
+		"GET /v1/shows/:id/seasons/:season/episodes/:episode/translations": true,
+		"GET /v1/shows/:id/seasons/:season/episodes/:episode/videos":       true,
+		"GET /v1/shows/:id/seasons/:season/episodes/:episode/watching":     true,
+		"GET /v1/shows/:id/seasons/:season/videos":                         true,
+		"GET /v1/shows/:id/seasons/:season/watching":                       true,
+		"GET /v1/shows/:id/studios":                                        true,
+		"GET /v1/shows/:id/videos":                                         true,
+	}
+
+	for dup := range got {
+		if !knownDuplicates[dup] {
+			t.Errorf("%s is registered more than once and is not in knownDuplicates: exactly one implementation may own a method+path, because the later registration is unreachable dead code", dup)
+		}
+	}
+	for dup := range knownDuplicates {
+		if !got[dup] {
+			t.Errorf("%s is listed in knownDuplicates but is no longer registered twice — delete its line so the debt list only shrinks", dup)
+		}
+	}
+	if len(got) > len(knownDuplicates) {
+		t.Errorf("duplicate routes grew to %d, want at most %d", len(got), len(knownDuplicates))
+	}
+}

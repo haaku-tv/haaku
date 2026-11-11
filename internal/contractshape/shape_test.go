@@ -1,6 +1,9 @@
 package contractshape
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/haaku-tv/haaku/internal/database"
@@ -67,5 +70,170 @@ func TestUserNilIsMarkedDeleted(t *testing.T) {
 	ids := got["ids"].(map[string]any)
 	if _, ok := ids["trakt"].(int64); !ok {
 		t.Fatalf("ids.trakt = %#v, want an integer even for a deleted user", ids["trakt"])
+	}
+}
+
+// mediaImageKeySet is the contract's required image keys, copied from
+// docs/parity/upstream/trakt-openapi.json. It is duplicated here on purpose: a
+// test that reads the map it is testing proves nothing.
+var mediaImageKeySet = map[string][]string{
+	"movie":   {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"show":    {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"season":  {"poster", "thumb"},
+	"episode": {"screenshot"},
+	"person":  {"headshot", "fanart"},
+	"list":    {"posters"},
+}
+
+// TestMediaImagesCarryEveryRequiredKey is the #140 acceptance test: every media
+// type's images object carries its full required key set, as arrays, even for a
+// row that holds no images at all. A missing key is a conformance failure
+// (`images.logo: missing required field` was the first diff on 44 operations),
+// and a null would be rejected by the contract's ["array"] item type just as
+// hard — so the assertions are on the key set and the JSON type, not the values.
+func TestMediaImagesCarryEveryRequiredKey(t *testing.T) {
+	cases := []struct {
+		name   string
+		kind   string
+		stored database.JSONMap
+		// expect maps a key to the URLs it must resolve to, for the rows that
+		// hold data under a provider's own key name.
+		expect map[string][]string
+	}{
+		{name: "movie with nothing stored", kind: "movie"},
+		{name: "show with nothing stored", kind: "show"},
+		{name: "season with nothing stored", kind: "season"},
+		{name: "episode with nothing stored", kind: "episode"},
+		{name: "person with nothing stored", kind: "person"},
+		{name: "list with nothing stored", kind: "list"},
+		{
+			name:   "movie resolves poster and maps backdrop onto fanart",
+			kind:   "movie",
+			stored: database.JSONMap{"poster": "https://example.test/p.jpg", "backdrop": "https://example.test/b.jpg"},
+			expect: map[string][]string{
+				"poster": {"https://example.test/p.jpg"},
+				"fanart": {"https://example.test/b.jpg"},
+			},
+		},
+		{
+			name:   "show resolves a bare TMDB path and a tvdb poster",
+			kind:   "show",
+			stored: database.JSONMap{"poster_path": "/abc.jpg"},
+			expect: map[string][]string{"poster": {"https://image.tmdb.org/t/p/w500/abc.jpg"}},
+		},
+		{
+			name:   "episode maps its still onto screenshot",
+			kind:   "episode",
+			stored: database.JSONMap{"still": "https://example.test/s.jpg"},
+			expect: map[string][]string{"screenshot": {"https://example.test/s.jpg"}},
+		},
+		{
+			name:   "person maps a raw profile path onto headshot",
+			kind:   "person",
+			stored: database.JSONMap{"profile_path": "/who.jpg"},
+			expect: map[string][]string{"headshot": {"https://image.tmdb.org/t/p/w500/who.jpg"}},
+		},
+		{
+			name:   "list resolves its cover URL onto the plural posters key",
+			kind:   "list",
+			stored: database.JSONMap{"posters": []any{"https://example.test/cover.jpg"}},
+			expect: map[string][]string{"posters": {"https://example.test/cover.jpg"}},
+		},
+		{
+			name:   "a stored array round-tripped through JSONB is preserved",
+			kind:   "movie",
+			stored: database.JSONMap{"poster": []any{"https://example.test/1.jpg", "https://example.test/2.jpg"}},
+			expect: map[string][]string{"poster": {"https://example.test/1.jpg", "https://example.test/2.jpg"}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MediaImages(tc.kind, tc.stored)
+
+			want := mediaImageKeySet[tc.kind]
+			if len(got) != len(want) {
+				t.Errorf("%s images has %d keys, want exactly %d: %v", tc.kind, len(got), len(want), got)
+			}
+			for _, key := range want {
+				raw, ok := got[key]
+				if !ok {
+					t.Errorf("%s images.%s missing — the contract requires it", tc.kind, key)
+					continue
+				}
+				// Must be a real array, never nil (null) and never a bare string.
+				values, ok := raw.([]string)
+				if !ok {
+					t.Errorf("%s images.%s is %T, want []string (the contract's item type is an array)", tc.kind, key, raw)
+					continue
+				}
+				if wantURLs, checked := tc.expect[key]; checked {
+					if !reflect.DeepEqual(values, wantURLs) {
+						t.Errorf("%s images.%s = %v, want %v", tc.kind, key, values, wantURLs)
+					}
+				}
+			}
+
+			// And the whole thing must survive JSON as arrays, not nulls.
+			encoded, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if strings.Contains(string(encoded), "null") {
+				t.Errorf("images marshalled with a null value: %s", encoded)
+			}
+		})
+	}
+}
+
+// TestListImagesUseThePluralRequiredKey pins the list object's images shape.
+// The contract declares exactly one key there, `posters`, and marks it required;
+// the list builders emitted `poster` (a key the contract does not declare for a
+// list) and omitted `posters`, so POST /users/{id}/lists failed conformance with
+// `$.images.posters: missing required field`.
+func TestListImagesUseThePluralRequiredKey(t *testing.T) {
+	empty := ListImages("")
+	if _, ok := empty["posters"]; !ok {
+		t.Fatalf("list images = %v, want a posters key", empty)
+	}
+	if len(empty) != 1 {
+		t.Errorf("list images has %d keys, want exactly posters: %v", len(empty), empty)
+	}
+	if _, ok := empty["poster"]; ok {
+		t.Errorf("list images carries a singular poster key, which the contract does not declare for a list")
+	}
+
+	covered := ListImages("https://example.test/cover.jpg")
+	got, ok := covered["posters"].([]string)
+	if !ok || len(got) != 1 || got[0] != "https://example.test/cover.jpg" {
+		t.Errorf("list images.posters = %v, want the cover URL", covered["posters"])
+	}
+}
+
+// TestListImagesKeepANonTMDBCoverPathVerbatim guards a regression introduced
+// while building this shape: a list's cover_url is a native upload path such as
+// "/uploads/cover.jpg", NOT a TMDB path. Routing it through tmdb.ImageURL
+// rewrote it to image.tmdb.org/t/p/w500/uploads/cover.jpg, pointing every client
+// at a 404 on someone else's CDN. Media keys still convert; only keys whose
+// stored value is already the final URL (posters) are served verbatim.
+func TestListImagesKeepANonTMDBCoverPathVerbatim(t *testing.T) {
+	for _, cover := range []string{"/uploads/cover.jpg", "https://haaku.test/c/1.jpg"} {
+		got, ok := ListImages(cover)["posters"].([]string)
+		if !ok || len(got) != 1 {
+			t.Fatalf("posters = %v, want one entry for %q", ListImages(cover)["posters"], cover)
+		}
+		if got[0] != cover {
+			t.Errorf("posters[0] = %q, want %q served verbatim", got[0], cover)
+		}
+	}
+}
+
+// TestMediaImagesStillConvertBareTMPaths is the other half: the media keys must
+// keep joining a bare TMDB path, so the verbatim rule cannot be applied wholesale.
+func TestMediaImagesStillConvertBareTMPaths(t *testing.T) {
+	got := MediaImages("movie", database.JSONMap{"poster_path": "/abc.jpg"})
+	poster, _ := got["poster"].([]string)
+	if len(poster) != 1 || poster[0] != "https://image.tmdb.org/t/p/w500/abc.jpg" {
+		t.Errorf("movie images.poster = %v, want the joined TMDB URL", got["poster"])
 	}
 }

@@ -11,8 +11,10 @@ package contractshape
 import (
 	"hash/fnv"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/haaku-tv/haaku/external/tmdb"
 	"github.com/haaku-tv/haaku/internal/database"
 
 	"gorm.io/gorm"
@@ -152,6 +154,150 @@ func SeasonIDs(s *database.Season) map[string]any {
 	}
 }
 
+// mediaImageKeys is the contract's required image key set for each media type.
+// The contract types a media `images` object as a CLOSED set whose keys are all
+// required (the object itself is nullable: ["object","null"]), so a key we hold
+// nothing for must still be present as an empty array. Absent is a validation
+// failure — `images.logo: missing required field` was the first reported diff on
+// 44 operations. This is the third field with that failure mode (ids in #114,
+// parent_id in #129), which is why it lives in one helper instead of three
+// copies.
+//
+// An empty array is also the honest value: it says "we hold no logo", which is
+// true, and is not a fabricated URL.
+var mediaImageKeys = map[string][]string{
+	"movie":   {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"show":    {"fanart", "poster", "logo", "clearart", "banner", "thumb"},
+	"season":  {"poster", "thumb"},
+	"episode": {"screenshot"},
+	"person":  {"headshot", "fanart"},
+	// A list object's images carry a single required key, plural. It has its own
+	// entry because the name differs from the media objects' singular `poster`.
+	"list": {"posters"},
+}
+
+// imageAliases points a contract key at every store key the same image may hide
+// under, in preference order. The store keeps the ingestion providers' shapes —
+// TMDB's `poster`/`backdrop`, TVDB's `tvdb_poster`/`tvdb_backdrop`/`logo`, a
+// person's raw `profile_path`, an episode's `still` — while the contract names
+// the reader-facing set. A backdrop IS Trakt's fanart and a still IS an
+// episode's screenshot; leaving those keys empty while the URL sits in the row
+// would be under-reporting data we actually hold.
+var imageAliases = map[string][]string{
+	// The `_path` entries are the raw TMDB paths movieImages/seriesImages also
+	// record; imageURLs joins them to the CDN, so a row that has a path but no
+	// pre-joined URL still serves one.
+	"fanart":     {"fanart", "backdrop", "backdrop_path", "tvdb_backdrop"},
+	"poster":     {"poster", "poster_path", "tvdb_poster"},
+	"screenshot": {"screenshot", "still", "still_url", "poster", "still_path"},
+	"headshot":   {"headshot", "profile_path"},
+	"posters":    {"posters", "poster"},
+}
+
+// imageVerbatim marks keys whose stored value is ALREADY the URL to serve and
+// must not be joined to a provider CDN. A list's cover_url is a native upload
+// path such as /uploads/cover.jpg; running it through tmdb.ImageURL would
+// rewrite it to image.tmdb.org/t/p/w500/uploads/cover.jpg and point every client
+// at a 404 on someone else's CDN.
+var imageVerbatim = map[string]bool{"posters": true}
+
+// imageSizes picks the CDN width for a key that holds a bare TMDB path.
+var imageSizes = map[string]string{
+	"poster":     tmdb.ImageSizePoster,
+	"fanart":     tmdb.ImageSizeBackdrop,
+	"screenshot": tmdb.ImageSizeStill,
+	"headshot":   tmdb.ImageSizePoster,
+	"posters":    tmdb.ImageSizePoster,
+}
+
+// MediaImages renders one media type's contract images object: every required
+// key present, every value an array of absolute URL strings. Stored values are
+// normalised because the row holds scalars for some keys and arrays for others
+// while the contract's item type is ["array"], and because a bare TMDB path has
+// to be joined to the image CDN before it is a URL a client can fetch.
+func MediaImages(kind string, stored database.JSONMap) map[string]any {
+	keys := mediaImageKeys[kind]
+	out := make(map[string]any, len(keys))
+	for _, key := range keys {
+		out[key] = imageValuesFor(key, stored)
+	}
+	return out
+}
+
+// ListImages renders the contract's list images object. It has exactly one
+// required key, `posters` (plural), and a list's single image is its CoverURL.
+// The list builders used to emit `poster` — a key the contract does not declare
+// there — and omit `posters`, which is the required one, so the create-list
+// response failed with `$.images.posters: missing required field`.
+func ListImages(coverURL string) map[string]any {
+	stored := database.JSONMap{}
+	if coverURL != "" {
+		stored["posters"] = []string{coverURL}
+	}
+	return MediaImages("list", stored)
+}
+
+// imageValuesFor resolves one required key, trying its aliases in order and
+// returning a non-nil empty slice when the store holds nothing for any of them.
+// Non-nil matters: a nil slice marshals to null, which the contract's ["array"]
+// type rejects just as hard as a missing key.
+func imageValuesFor(key string, stored database.JSONMap) []string {
+	names := imageAliases[key]
+	if len(names) == 0 {
+		names = []string{key}
+	}
+	if stored != nil {
+		for _, name := range names {
+			raw, ok := stored[name]
+			if !ok {
+				continue
+			}
+			if values := imageURLs(raw, imageSizes[key], !imageVerbatim[key]); len(values) > 0 {
+				return values
+			}
+		}
+	}
+	return []string{}
+}
+
+// imageURLs normalises a stored value (scalar path, []string, or the []any a
+// JSONB round-trip produces) into URL strings. convert joins a bare provider
+// path to the image CDN; with it off the stored value is served verbatim, which
+// is what a key holding an already-final URL needs.
+func imageURLs(raw any, size string, convert bool) []string {
+	url := func(s string) string {
+		if !convert {
+			return strings.TrimSpace(s)
+		}
+		return tmdb.ImageURL(s, size)
+	}
+	switch v := raw.(type) {
+	case string:
+		if u := url(v); u != "" {
+			return []string{u}
+		}
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, s := range v {
+			if u := url(s); u != "" {
+				out = append(out, u)
+			}
+		}
+		return out
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, entry := range v {
+			if s, ok := entry.(string); ok {
+				if u := url(s); u != "" {
+					out = append(out, u)
+				}
+			}
+		}
+		return out
+	}
+	return []string{}
+}
+
 // Season renders a season in the contract's season object shape. The contract
 // requires number and ids; aired_episodes is emitted from the row.
 //
@@ -160,14 +306,7 @@ func SeasonIDs(s *database.Season) map[string]any {
 // contract's {poster, thumb} arrays, populated from the stored image blob when
 // it carries those keys.
 func Season(s *database.Season) map[string]any {
-	images := map[string]any{"poster": []string{}, "thumb": []string{}}
-	if s.Images != nil {
-		for _, key := range []string{"poster", "thumb"} {
-			if value, ok := s.Images[key]; ok {
-				images[key] = value
-			}
-		}
-	}
+	images := MediaImages("season", s.Images)
 	out := map[string]any{
 		"number":         s.SeasonNumber,
 		"ids":            SeasonIDs(s),
@@ -200,10 +339,7 @@ func ListIDs(l *database.List) map[string]any {
 // Movie renders a movie in the contract's movie object shape. The contract
 // requires title and ids; the rest are populated where the row has them.
 func Movie(m *database.Movie) map[string]any {
-	images := map[string]any{}
-	if m.Images != nil {
-		images = map[string]any(m.Images)
-	}
+	images := MediaImages("movie", m.Images)
 	genres := []string{}
 	if m.Genres != nil {
 		genres = m.Genres.Values()
@@ -231,10 +367,7 @@ func Movie(m *database.Movie) map[string]any {
 // Show renders a show in the contract's show object shape. The contract
 // requires title and ids.
 func Show(s *database.Show) map[string]any {
-	images := map[string]any{}
-	if s.Images != nil {
-		images = map[string]any(s.Images)
-	}
+	images := MediaImages("show", s.Images)
 	genres := []string{}
 	if s.Genres != nil {
 		genres = s.Genres.Values()
@@ -284,7 +417,7 @@ func Episode(e *database.Episode, seasonNumber int) map[string]any {
 		"original_title":         nil,
 		"after_credits":          nil,
 		"during_credits":         nil,
-		"images":                 map[string]any{"screenshot": []string{}},
+		"images":                 MediaImages("episode", e.Images),
 	}
 }
 
@@ -292,15 +425,7 @@ func Episode(e *database.Episode, seasonNumber int) map[string]any {
 // requires name and ids; fields it types as null are emitted as null rather
 // than inventing a value the store does not hold.
 func Person(p *database.Person) map[string]any {
-	images := map[string]any{"headshot": []string{}, "fanart": []string{}}
-	if p.Images != nil {
-		if v, ok := p.Images["headshot"]; ok {
-			images["headshot"] = v
-		}
-		if v, ok := p.Images["fanart"]; ok {
-			images["fanart"] = v
-		}
-	}
+	images := MediaImages("person", p.Images)
 	return map[string]any{
 		"name":                 p.Name,
 		"ids":                  PersonIDs(p),
@@ -436,10 +561,7 @@ func List(l *database.List, user *database.User) map[string]any {
 // that have the count (a grouped list_items query) use this rather than emitting
 // the contract's required item_count as a fabricated zero.
 func ListWithItemCount(l *database.List, user *database.User, itemCount int64) map[string]any {
-	images := map[string]any{}
-	if l.CoverURL != "" {
-		images["poster"] = []string{l.CoverURL}
-	}
+	images := ListImages(l.CoverURL)
 	return map[string]any{
 		"name":            l.Name,
 		"description":     NullableString(l.Description),

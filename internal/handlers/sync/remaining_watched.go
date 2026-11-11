@@ -336,7 +336,9 @@ func watchedSeasons(c *fiber.Ctx, db *gorm.DB, userID string) error {
 				"aired_episodes": season.EpisodeCount,
 				"title":          nil,
 				"overview":       nil,
-				"images":         map[string]any{},
+				// The contract's season images object requires poster and
+				// thumb; an empty map was a missing-required-field diff.
+				"images": contractshape.MediaImages("season", season.Images),
 			},
 		}
 		if s, ok := showByID[g.ShowID]; ok {

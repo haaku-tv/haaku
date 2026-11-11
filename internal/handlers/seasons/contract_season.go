@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/haaku-tv/haaku/internal/contractshape"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/handlers/media"
 	"github.com/haaku-tv/haaku/internal/openapi"
@@ -21,12 +20,20 @@ import (
 // are flat (/v1/seasons/{id}/ratings, /v1/seasons/{id}/stats) and use our
 // internal season id. These routes resolve show+season_number to that id and
 // emit the contract's shapes.
+//
+// /shows/{id}/seasons/{season}/info is deliberately NOT registered here. This
+// package can only answer it from the season row (title, overview and the TMDB
+// id are null), while tmdbmeta serves the provider-backed season detail. Both
+// packages used to register the path, so whichever ran first won and the other
+// was dead code; tmdbmeta's is the one that carries real data, so it is the only
+// owner. internal/httpapi's TestNoRouteIsRegisteredTwice keeps a second
+// registration from coming back, and its season-info test pins that the route
+// answers the provider-backed response.
 
 func init() {
 	routes := []openapi.RouteDef{
 		{Method: "GET", Path: "/v1/shows/{id}/seasons/{season}/ratings", Summary: "Season rating distribution (contract path)", Tags: []string{"Seasons"}, Auth: "none", StatusCodes: map[int]string{200: "Ratings", 400: "Invalid season number", 404: "Show or season not found"}},
 		{Method: "GET", Path: "/v1/shows/{id}/seasons/{season}/stats", Summary: "Season stats (contract path)", Tags: []string{"Seasons"}, Auth: "none", StatusCodes: map[int]string{200: "Stats", 400: "Invalid season number", 404: "Show or season not found"}},
-		{Method: "GET", Path: "/v1/shows/{id}/seasons/{season}/info", Summary: "Single season summary (contract path)", Tags: []string{"Seasons"}, Auth: "none", StatusCodes: map[int]string{200: "Season"}},
 	}
 	for _, r := range routes {
 		openapi.Register(r)
@@ -37,21 +44,6 @@ func init() {
 func registerContractSeasonRoutes(api fiber.Router) {
 	api.Get("/shows/:id/seasons/:season/ratings", handleContractSeasonRatings)
 	api.Get("/shows/:id/seasons/:season/stats", handleContractSeasonStats)
-	api.Get("/shows/:id/seasons/:season/info", handleContractSeasonInfo)
-}
-
-// handleContractSeasonInfo serves GET /v1/shows/{id}/seasons/{season}/info in
-// the contract's season shape. Every full-extended field the row can answer is
-// emitted; fields it does not hold are null, as the schema allows.
-func handleContractSeasonInfo(c *fiber.Ctx) error {
-	_, season, err := resolveShowSeason(c)
-	if err != nil {
-		return err
-	}
-	if season == nil {
-		return nil
-	}
-	return c.JSON(contractshape.Season(season))
 }
 
 // resolveShowSeason turns the contract's show+season segment into our season

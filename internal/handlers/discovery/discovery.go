@@ -182,6 +182,71 @@ func discoveryCacheKey(mediaType, kind string, page, limit int, extended string)
 	return fmt.Sprintf("discovery:%s:%s:page%d:limit%d:extended%s", mediaType, kind, page, limit, extended)
 }
 
+// cachedListing is what the paginated list endpoints store in Redis: the encoded
+// response body PLUS the pagination metadata that is delivered as headers.
+//
+// Caching only the body meant a cache hit answered without X-Pagination-*, so
+// the same request returned different headers depending on whether the entry was
+// warm. That is a real client-visible loss, and it made the ranked feeds flap
+// between conformant and failing in `make conformance` — the harness re-requests
+// a passing payload for its injection probes, so a run could see a cold first
+// request (headers present, PASS) and the next run a warm one (no headers,
+// FAIL).
+type cachedListing struct {
+	Body  json.RawMessage `json:"body"`
+	Page  int             `json:"page"`
+	Limit int             `json:"limit"`
+	Total int64           `json:"total"`
+	Items int             `json:"items"`
+}
+
+// discoveryGetListing replays a cached listing onto the response, headers
+// included, and reports whether it answered. A miss, an unreadable entry or any
+// Redis problem returns false so the caller falls through to the DB — the cache
+// is best-effort and never fails the request.
+func discoveryGetListing(c *fiber.Ctx, key string) bool {
+	if projredis.GetClient() == nil {
+		return false
+	}
+	data, err := projredis.GetCacheData(key)
+	if err != nil {
+		return false
+	}
+	var listing cachedListing
+	if err := json.Unmarshal(data, &listing); err != nil || len(listing.Body) == 0 {
+		// An entry written by the old body-only shape, or one with no body, is
+		// unusable: treat it as a miss so the next request recomputes and
+		// rewrites it rather than answering 200 with an empty body.
+		return false
+	}
+	response.SetPaginationHeaders(c, listing.Page, listing.Limit, listing.Total, listing.Items)
+	c.Set("Content-Type", "application/json")
+	return c.Send(listing.Body) == nil
+}
+
+// discoverySetListing stores the body together with its pagination metadata.
+// Best-effort: a Redis or marshal failure only logs.
+func discoverySetListing(key string, page, limit int, total int64, items int, v interface{}) {
+	if projredis.GetClient() == nil {
+		return
+	}
+	body, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("[discovery] cache marshal error for key %s: %v", key, err)
+		return
+	}
+	payload, err := json.Marshal(cachedListing{
+		Body: body, Page: page, Limit: limit, Total: total, Items: items,
+	})
+	if err != nil {
+		log.Printf("[discovery] cache envelope error for key %s: %v", key, err)
+		return
+	}
+	if err := projredis.SetCacheData(key, payload, discoveryListTTL); err != nil {
+		log.Printf("[discovery] cache set error for key %s: %v", key, err)
+	}
+}
+
 // discoveryGetCache returns the cached raw JSON body for key. It returns
 // (nil, false) on any miss or Redis unavailability so the caller falls through
 // to the DB — the cache is best-effort and never blocks or fails the request.
