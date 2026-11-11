@@ -35,6 +35,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
+import { firstImage } from '@/lib/images'
 import { cn, formatDate, formatRuntime } from '@/lib/utils'
 
 export const Route = createFileRoute('/movies/$id')({
@@ -132,7 +133,7 @@ function MovieDetailPage() {
         eyebrow={String(movie.year)}
         title={movie.title}
         subtitle={movie.overview}
-        image={movie.images?.backdrop ?? movie.images?.poster}
+        image={firstImage(movie.images, 'fanart', 'backdrop', 'poster')}
         chips={
           <GenreStrip
             genres={(movie.genres ?? []).map((g) => ({ label: g }))}
@@ -294,7 +295,11 @@ function MovieDetailPage() {
                 <PosterCard
                   title={member.person?.name ?? 'Unknown'}
                   meta={member.character}
-                  image={member.person?.images?.headshot}
+                  image={firstImage(
+                    member.person?.images,
+                    'headshot',
+                    'fanart'
+                  )}
                   aspect="2:3"
                 />
               </div>
@@ -330,7 +335,7 @@ function MovieDetailPage() {
                 key={m.ids?.trakt ?? m.ids?.slug}
                 title={m.title}
                 meta={String(m.year ?? '')}
-                image={m.images?.poster}
+                image={firstImage(m.images, 'poster')}
                 rating={m.rating ? (m.rating / 2).toFixed(1) : undefined}
                 type="movie"
                 aspect="2:3"

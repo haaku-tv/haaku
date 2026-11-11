@@ -11,6 +11,7 @@ import {
   ShimmerText,
   StatCard,
 } from '@/components/ui'
+import { firstImage } from '@/lib/images'
 import { formatDate, formatRuntime } from '@/lib/utils'
 
 export const Route = createFileRoute('/episodes/$id')({
@@ -57,7 +58,13 @@ function EpisodeDetailPage() {
         eyebrow={`Season ${episode.season} · Episode ${episode.number}`}
         title={episode.title}
         subtitle={episode.overview}
-        image={episode.images?.backdrop ?? episode.images?.poster}
+        image={firstImage(
+          episode.images,
+          'fanart',
+          'backdrop',
+          'screenshot',
+          'poster'
+        )}
       />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">

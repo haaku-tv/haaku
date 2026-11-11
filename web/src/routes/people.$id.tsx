@@ -15,6 +15,7 @@ import {
   Rail,
   ShimmerText,
 } from '@/components/ui'
+import { firstImage } from '@/lib/images'
 import { formatDate } from '@/lib/utils'
 
 export const Route = createFileRoute('/people/$id')({
@@ -68,7 +69,7 @@ function PersonDetailPage() {
               : person.biography
             : undefined
         }
-        image={person.images?.headshot ?? person.images?.poster}
+        image={firstImage(person.images, 'headshot', 'fanart', 'poster')}
       />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -132,7 +133,7 @@ function PersonDetailPage() {
                   key={movie.ids?.trakt ?? movie.ids?.slug}
                   title={movie.title}
                   meta={String(movie.year ?? '')}
-                  image={movie.images?.poster}
+                  image={firstImage(movie.images, 'poster')}
                   rating={
                     movie.rating ? (movie.rating / 2).toFixed(1) : undefined
                   }
@@ -162,7 +163,7 @@ function PersonDetailPage() {
                   key={show.ids?.trakt ?? show.ids?.slug}
                   title={show.title}
                   meta={String(show.year ?? '')}
-                  image={show.images?.poster}
+                  image={firstImage(show.images, 'poster')}
                   rating={
                     show.rating ? (show.rating / 2).toFixed(1) : undefined
                   }

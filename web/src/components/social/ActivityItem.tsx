@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { ActivityItem as ActivityItemType } from '@/api/types'
 import { activateOnKey } from '@/lib/a11y'
+import { firstImage } from '@/lib/images'
 import { cn } from '@/lib/utils'
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
@@ -104,6 +105,11 @@ interface ActivityItemProps {
 export function ActivityItem({ item, className }: ActivityItemProps) {
   const navigate = useNavigate()
   const link = getMediaLink(item)
+  // The thumbnail is the movie's poster or, for an episode activity, the
+  // show's: `images` is contract-shaped now, so read it through firstImage.
+  const thumb =
+    firstImage(item.movie?.images, 'poster') ??
+    firstImage(item.show?.images, 'poster')
 
   return (
     <div
@@ -143,7 +149,7 @@ export function ActivityItem({ item, className }: ActivityItemProps) {
       </div>
 
       {/* Thumbnail */}
-      {(item.movie?.images?.poster || item.show?.images?.poster) && (
+      {thumb && (
         <div
           role="button"
           tabIndex={0}
@@ -151,11 +157,7 @@ export function ActivityItem({ item, className }: ActivityItemProps) {
           onClick={() => link && navigate({ to: link })}
           onKeyDown={activateOnKey}
         >
-          <img
-            src={item.movie?.images?.poster ?? item.show?.images?.poster}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <img src={thumb} alt="" className="h-full w-full object-cover" />
         </div>
       )}
     </div>

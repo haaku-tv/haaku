@@ -50,6 +50,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
+import { episodeStill, firstImage } from '@/lib/images'
 import { cn, formatDate, formatRuntime } from '@/lib/utils'
 
 export const Route = createFileRoute('/shows/$id')({
@@ -151,7 +152,7 @@ function ShowDetailPage() {
         eyebrow={String(show.year)}
         title={show.title}
         subtitle={show.overview}
-        image={show.images?.backdrop ?? show.images?.poster}
+        image={firstImage(show.images, 'fanart', 'backdrop', 'poster')}
         chips={
           <GenreStrip genres={(show.genres ?? []).map((g) => ({ label: g }))} />
         }
@@ -336,9 +337,9 @@ function ShowDetailPage() {
                   onKeyDown={activateOnKey}
                 >
                   <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-sf-sm bg-sf-bg-3">
-                    {ep.images?.poster ? (
+                    {episodeStill(ep.images) ? (
                       <img
-                        src={ep.images.poster}
+                        src={episodeStill(ep.images)}
                         alt={ep.title}
                         className="h-full w-full object-cover"
                         loading="lazy"
@@ -400,7 +401,11 @@ function ShowDetailPage() {
                 <PosterCard
                   title={member.person?.name ?? 'Unknown'}
                   meta={member.character}
-                  image={member.person?.images?.headshot}
+                  image={firstImage(
+                    member.person?.images,
+                    'headshot',
+                    'fanart'
+                  )}
                   aspect="2:3"
                 />
               </div>
@@ -436,7 +441,7 @@ function ShowDetailPage() {
                 key={s.ids?.trakt ?? s.ids?.slug}
                 title={s.title}
                 meta={String(s.year ?? '')}
-                image={s.images?.poster}
+                image={firstImage(s.images, 'poster')}
                 rating={s.rating ? (s.rating / 2).toFixed(1) : undefined}
                 type="series"
                 aspect="2:3"

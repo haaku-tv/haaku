@@ -1,4 +1,5 @@
 import type { Ids, SearchResult } from '@/api/types'
+import { episodeStill, firstImage } from '@/lib/images'
 
 /**
  * cardOf reduces a search result to what a card needs: which media type it is,
@@ -33,7 +34,7 @@ export function cardOf(result: SearchResult): CardModel | null {
         mediaType: 'movie',
         title: String(m.title ?? ''),
         meta: m.year ? String(m.year) : undefined,
-        image: m.images?.poster,
+        image: firstImage(m.images, 'poster'),
         rating: m.rating ? (Number(m.rating) / 2).toFixed(1) : undefined,
         aspect: '2:3',
         ids: m.ids,
@@ -51,7 +52,7 @@ export function cardOf(result: SearchResult): CardModel | null {
         mediaType: 'show',
         title: String(s.title ?? ''),
         meta: s.year ? String(s.year) : undefined,
-        image: s.images?.poster,
+        image: firstImage(s.images, 'poster'),
         rating: s.rating ? (Number(s.rating) / 2).toFixed(1) : undefined,
         aspect: '2:3',
         ids: s.ids,
@@ -69,7 +70,7 @@ export function cardOf(result: SearchResult): CardModel | null {
         mediaType: 'episode',
         title: String(ep.title ?? ''),
         meta: `S${ep.season} E${ep.number}`,
-        image: ep.images?.poster ?? ep.images?.thumb,
+        image: episodeStill(ep.images),
         aspect: '16:9',
         ids: ep.ids,
         inCatalog: localId > 0,
@@ -85,7 +86,7 @@ export function cardOf(result: SearchResult): CardModel | null {
       return {
         mediaType: 'person',
         title: String(p.name ?? ''),
-        image: p.images?.headshot ?? p.images?.poster,
+        image: firstImage(p.images, 'headshot', 'fanart', 'poster'),
         aspect: '2:3',
         ids: p.ids,
         inCatalog: true,

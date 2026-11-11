@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useApi } from '@/api/client'
+import type { ImageSet } from '@/api/types'
 
 export interface CalendarEpisode {
   episode: {
@@ -11,13 +12,13 @@ export interface CalendarEpisode {
     first_aired?: string
     runtime?: number
     rating?: number
-    images?: { screenshot?: string }
+    images?: ImageSet
   }
   show: {
     title: string
     year: number
     ids: { trakt: number; slug: string; imdb?: string; tmdb?: number }
-    images?: { poster?: string; thumb?: string }
+    images?: ImageSet
   }
   season?: {
     number: number
