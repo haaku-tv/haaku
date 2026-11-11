@@ -152,7 +152,7 @@ function ShowDetailPage() {
         eyebrow={String(show.year)}
         title={show.title}
         subtitle={show.overview}
-        image={firstImage(show.images, 'fanart', 'poster')}
+        image={firstImage(show.images, 'fanart', 'backdrop', 'poster')}
         chips={
           <GenreStrip genres={(show.genres ?? []).map((g) => ({ label: g }))} />
         }

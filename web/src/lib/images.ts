@@ -13,7 +13,7 @@ import type { ImageSet, ImageURLs } from '@/api/types'
  * The keys are named by the CALLER because the contract names them per type:
  * a backdrop is `fanart`, an episode's still is `screenshot`, a person's portrait
  * is `headshot`, and a list's cover is the plural `posters`. Ordering is the
- * caller's too — `firstImage(show.images, 'fanart', 'poster')` reads the wide
+ * caller's too — `firstImage(show.images, 'fanart', 'backdrop', 'poster')` reads the wide
  * backdrop first and falls back to the square poster.
  *
  * A scalar value is accepted as well as an array: a stored row, and a response

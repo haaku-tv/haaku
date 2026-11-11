@@ -40,6 +40,20 @@ describe('firstImage', () => {
     expect(firstImage({ poster: ['', 'p.jpg'] }, 'poster')).toBe('p.jpg')
   })
 
+  it('prefers a legacy backdrop over the poster, the way the old chain did', () => {
+    // `backdrop` is the name a stored row carries for fanart, so a row holding one
+    // and no fanart must still render it — the chain this replaced was
+    // `backdrop ?? poster` — while a real fanart still wins over it.
+    const hero = ['fanart', 'backdrop', 'poster'] as const
+    expect(
+      firstImage({ backdrop: ['b.jpg'], poster: ['p.jpg'] }, ...hero)
+    ).toBe('b.jpg')
+    expect(
+      firstImage({ fanart: ['f.jpg'], backdrop: ['b.jpg'] }, ...hero)
+    ).toBe('f.jpg')
+    expect(firstImage({ poster: ['p.jpg'] }, ...hero)).toBe('p.jpg')
+  })
+
   it('handles a missing or null images object', () => {
     expect(firstImage(undefined, 'poster')).toBeUndefined()
     expect(firstImage(null, 'poster')).toBeUndefined()

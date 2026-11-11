@@ -58,7 +58,13 @@ function EpisodeDetailPage() {
         eyebrow={`Season ${episode.season} · Episode ${episode.number}`}
         title={episode.title}
         subtitle={episode.overview}
-        image={firstImage(episode.images, 'fanart', 'screenshot', 'poster')}
+        image={firstImage(
+          episode.images,
+          'fanart',
+          'backdrop',
+          'screenshot',
+          'poster'
+        )}
       />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -60,7 +60,7 @@ function SeasonDetailPage() {
         eyebrow={`Season ${season.number}`}
         title={season.title ?? `Season ${season.number}`}
         subtitle={season.overview}
-        image={firstImage(season.images, 'fanart', 'poster')}
+        image={firstImage(season.images, 'fanart', 'backdrop', 'poster')}
       />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -133,7 +133,7 @@ function MovieDetailPage() {
         eyebrow={String(movie.year)}
         title={movie.title}
         subtitle={movie.overview}
-        image={firstImage(movie.images, 'fanart', 'poster')}
+        image={firstImage(movie.images, 'fanart', 'backdrop', 'poster')}
         chips={
           <GenreStrip
             genres={(movie.genres ?? []).map((g) => ({ label: g }))}
