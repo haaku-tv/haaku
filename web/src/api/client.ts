@@ -11,7 +11,12 @@ export type ApiClient = ReturnType<typeof createApiClient>
 
 export function createApiClient(getToken: () => Promise<string | null>) {
   const client = createClient<paths>({
-    baseUrl: import.meta.env.VITE_API_URL || '/',
+    // The generated paths all start with a slash, so a base that ends in one
+    // produces "//v1/..." — which a browser reads as a PROTOCOL-RELATIVE url
+    // and resolves against host "v1", failing with ERR_NAME_NOT_RESOLVED before
+    // the request leaves the page. Strip the trailing slash; an absolute
+    // VITE_API_URL with a trailing slash is the same mistake waiting to happen.
+    baseUrl: (import.meta.env.VITE_API_URL || '/').replace(/\/+$/, ''),
   })
 
   // Supply the bearer token on every request. The token source is abstracted:

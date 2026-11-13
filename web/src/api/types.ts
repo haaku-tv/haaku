@@ -123,6 +123,8 @@ export interface Show {
 
 export interface Episode {
   season: number
+  /** show_title is set on search cards so an episode is legible out of context. */
+  show_title?: string
   number: number
   title: string
   ids: Ids

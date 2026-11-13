@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Film, List, Plus, Tv, User } from 'lucide-react'
+import { Film, Plus, Tv, User } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -36,13 +36,15 @@ export const Route = createFileRoute('/search')({
   validateSearch: searchSchema,
 })
 
+// The Lists filter comes back when an instance can share lists between its
+// users: until then a list search can only ever answer nothing, and a filter
+// that cannot return a result is a broken control, not an empty one.
 const FILTER_TYPES: { value: SearchType; label: string; icon: typeof Film }[] =
   [
     { value: 'movie', label: 'Movies', icon: Film },
     { value: 'show', label: 'TV Shows', icon: Tv },
     { value: 'episode', label: 'Episodes', icon: Tv },
     { value: 'person', label: 'People', icon: User },
-    { value: 'list', label: 'Lists', icon: List },
   ]
 
 function SearchPage() {

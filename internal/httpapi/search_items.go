@@ -18,11 +18,36 @@ import (
 // app therefore has a single card component and a single decision — link
 // straight there, or resolve first.
 type searchItem struct {
-	Type   string       `json:"type"`
-	Score  float64      `json:"score"`
-	Source string       `json:"source"`
-	Movie  *searchMedia `json:"movie,omitempty"`
-	Show   *searchMedia `json:"show,omitempty"`
+	Type    string         `json:"type"`
+	Score   float64        `json:"score"`
+	Source  string         `json:"source"`
+	Movie   *searchMedia   `json:"movie,omitempty"`
+	Show    *searchMedia   `json:"show,omitempty"`
+	Episode *searchEpisode `json:"episode,omitempty"`
+	Person  *searchPerson  `json:"person,omitempty"`
+}
+
+// searchEpisode is an episode card. An episode is only ever a catalogue hit
+// (the metadata provider has no episode search), so in_catalog is always true
+// and the ids always carry the local row id the episode page opens.
+type searchEpisode struct {
+	IDs        media.IDs      `json:"ids"`
+	Title      string         `json:"title"`
+	Season     int            `json:"season"`
+	Number     int            `json:"number"`
+	Overview   string         `json:"overview,omitempty"`
+	Images     map[string]any `json:"images"`
+	Runtime    int            `json:"runtime,omitempty"`
+	FirstAired string         `json:"first_aired,omitempty"`
+	ShowTitle  string         `json:"show_title,omitempty"`
+}
+
+// searchPerson is a person card, likewise catalogue-only.
+type searchPerson struct {
+	IDs      media.IDs      `json:"ids"`
+	Name     string         `json:"name"`
+	KnownFor string         `json:"known_for,omitempty"`
+	Images   map[string]any `json:"images"`
 }
 
 // searchMedia is the media payload of a search card. It is a subset of the full
@@ -71,6 +96,9 @@ func contractSearchItems(results []database.SearchResult) []contractSearchItem {
 // media endpoints use so ids (including the TVDB link) are complete.
 func catalogSearchItems(results []database.SearchResult) []searchItem {
 	items := make([]searchItem, 0, len(results))
+	// Episode cards need their season number and show title, which the episode
+	// row does not carry. Two queries for the whole page instead of two per hit.
+	episodeCtx := loadEpisodeContext(results)
 	for _, result := range results {
 		switch result.Type {
 		case "movie":
@@ -114,9 +142,33 @@ func catalogSearchItems(results []database.SearchResult) []searchItem {
 					InCatalog: true,
 				},
 			})
+		case "episode":
+			if result.Episode == nil {
+				continue
+			}
+			items = append(items, searchItem{
+				Type:    "episode",
+				Source:  searchSourceCatalog,
+				Episode: episodeCard(result.Episode, episodeCtx),
+			})
+		case "person":
+			if result.Person == nil {
+				continue
+			}
+			response := media.BuildPersonResponse(result.Person)
+			items = append(items, searchItem{
+				Type:   "person",
+				Source: searchSourceCatalog,
+				Person: &searchPerson{
+					IDs:      response.IDs,
+					Name:     response.Name,
+					KnownFor: response.KnownForDepartment,
+					Images:   response.Images,
+				},
+			})
 		default:
-			// Episodes, people and lists are still answered only from the
-			// catalogue: TVDB's name search covers movies and series.
+			// Lists are the remaining type: they are only searchable once an
+			// instance can share them, so nothing answers from here yet.
 			continue
 		}
 	}
@@ -227,4 +279,75 @@ func pageCount(total int64, limit int) int {
 		pages = 1
 	}
 	return pages
+}
+
+// episodeRenderContext is what an episode card needs beyond the episode row.
+type episodeRenderContext struct {
+	seasonNumbers map[int64]int
+	showTitles    map[int64]string
+}
+
+// loadEpisodeContext resolves the seasons and shows an episode page of results
+// points at, in one query per table.
+func loadEpisodeContext(results []database.SearchResult) episodeRenderContext {
+	ctx := episodeRenderContext{
+		seasonNumbers: map[int64]int{},
+		showTitles:    map[int64]string{},
+	}
+	seasonIDs := make([]int64, 0, len(results))
+	showIDs := make([]int64, 0, len(results))
+	for _, result := range results {
+		if result.Type != "episode" || result.Episode == nil {
+			continue
+		}
+		seasonIDs = append(seasonIDs, result.Episode.SeasonID)
+		showIDs = append(showIDs, result.Episode.ShowID)
+	}
+	if len(seasonIDs) == 0 && len(showIDs) == 0 {
+		return ctx
+	}
+	db, err := database.GetDB()
+	if err != nil || db == nil {
+		return ctx
+	}
+	if len(seasonIDs) > 0 {
+		var rows []struct {
+			ID           int64
+			SeasonNumber int
+		}
+		if err := db.Table("seasons").Select("id, season_number").Where("id IN ?", seasonIDs).Scan(&rows).Error; err == nil {
+			for _, row := range rows {
+				ctx.seasonNumbers[row.ID] = row.SeasonNumber
+			}
+		}
+	}
+	if len(showIDs) > 0 {
+		var rows []struct {
+			ID    int64
+			Title string
+		}
+		if err := db.Table("shows").Select("id, title").Where("id IN ?", showIDs).Scan(&rows).Error; err == nil {
+			for _, row := range rows {
+				ctx.showTitles[row.ID] = row.Title
+			}
+		}
+	}
+	return ctx
+}
+
+// episodeCard renders one episode hit for a search card: the still, the S/E
+// pair, and the show it belongs to so the card is legible out of context.
+func episodeCard(e *database.Episode, ctx episodeRenderContext) *searchEpisode {
+	response := media.BuildEpisodeResponse(e)
+	return &searchEpisode{
+		IDs:        response.IDs,
+		Title:      response.Title,
+		Season:     ctx.seasonNumbers[e.SeasonID],
+		Number:     response.EpisodeNumber,
+		Overview:   response.Overview,
+		Images:     response.Images,
+		Runtime:    response.Runtime,
+		FirstAired: response.AiredAt,
+		ShowTitle:  ctx.showTitles[e.ShowID],
+	}
 }

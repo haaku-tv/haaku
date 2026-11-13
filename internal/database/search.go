@@ -8,11 +8,17 @@ import (
 )
 
 // SearchResult wraps a single search hit with its type and payload.
+//
+// List hits are absent on purpose: a list is only searchable once it has an
+// audience (an instance-shared list, see the list-sharing issue), so a `list`
+// type is accepted by the route and answered from nothing rather than shipped
+// as a permanently empty pill.
 type SearchResult struct {
-	Type  string `json:"type"`
-	Movie *Movie `json:"movie,omitempty"`
-	Show  *Show  `json:"show,omitempty"`
-	// Future: Episode, Person, List
+	Type    string   `json:"type"`
+	Movie   *Movie   `json:"movie,omitempty"`
+	Show    *Show    `json:"show,omitempty"`
+	Episode *Episode `json:"episode,omitempty"`
+	Person  *Person  `json:"person,omitempty"`
 }
 
 // SearchParams holds the validated search query parameters.
@@ -145,12 +151,25 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 	var results []SearchResult
 	var totalItems int64
 
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	// Each type is fetched with the window the caller asked for. Passing page 1
+	// and slicing the combined rows afterwards answered every page from the
+	// first page's rows — a second page whose rows happened to sit past the
+	// first window came back empty while the total said otherwise.
+	window := SearchParams{
+		Query:  params.Query,
+		Page:   1,
+		Limit:  page * params.Limit,
+		Fields: params.Fields,
+	}
+
 	for _, typ := range params.Types {
 		switch strings.ToLower(typ) {
 		case "movie":
-			movies, count, err := SearchMovies(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			movies, count, err := SearchMovies(db, window)
 			if err != nil {
 				return nil, err
 			}
@@ -159,9 +178,7 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 				results = append(results, SearchResult{Type: "movie", Movie: &movies[i]})
 			}
 		case "show":
-			shows, count, err := SearchShows(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			shows, count, err := SearchShows(db, window)
 			if err != nil {
 				return nil, err
 			}
@@ -170,25 +187,26 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 				results = append(results, SearchResult{Type: "show", Show: &shows[i]})
 			}
 		case "episode":
-			episodes, count, err := SearchEpisodes(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			// Catalogue-only by nature: the metadata provider has no episode
+			// search endpoint, so an episode is findable once its show has been
+			// ingested and not before. The rows used to be counted and dropped.
+			episodes, count, err := SearchEpisodes(db, window)
 			if err != nil {
 				return nil, err
 			}
 			totalItems += count
-			// TODO(Phase 2): Add Episode field to SearchResult
-			_ = episodes
+			for i := range episodes {
+				results = append(results, SearchResult{Type: "episode", Episode: &episodes[i]})
+			}
 		case "person":
-			people, count, err := SearchPeople(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			people, count, err := SearchPeople(db, window)
 			if err != nil {
 				return nil, err
 			}
 			totalItems += count
-			// TODO(Phase 2): Add Person field to SearchResult
-			_ = people
+			for i := range people {
+				results = append(results, SearchResult{Type: "person", Person: &people[i]})
+			}
 		}
 	}
 
@@ -196,10 +214,6 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 	totalPages := 1
 	if params.Limit > 0 {
 		totalPages = (int(totalItems) + params.Limit - 1) / params.Limit
-	}
-	page := params.Page
-	if page < 1 {
-		page = 1
 	}
 	start := (page - 1) * params.Limit
 	end := start + params.Limit
