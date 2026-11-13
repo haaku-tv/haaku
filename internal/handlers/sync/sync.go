@@ -133,20 +133,8 @@ func handleGetHistory(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := make([]historyResponse, 0, len(items))
-	for _, item := range items {
-		results = append(results, buildHistoryResponse(&item))
-	}
-	if results == nil {
-		results = make([]historyResponse, 0)
-	}
-
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	results, err := buildHistoryItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 // handleGetHistoryItem returns history for a specific media item.
@@ -602,13 +590,8 @@ func handleGetCollection(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildCollectionResponses(items)
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	results, err := buildCollectionItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddCollection(c *fiber.Ctx) error {
@@ -671,13 +654,8 @@ func handleGetWatchlist(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildWatchlistResponses(items)
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	results, err := buildWatchlistItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddWatchlist(c *fiber.Ctx) error {
@@ -956,13 +934,8 @@ func handleGetRatings(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildRatingResponses(items)
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	results, err := buildRatingItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 // ratingEpisode is the episode reference accepted by POST /v1/sync/ratings.
@@ -1243,13 +1216,8 @@ func handleGetFavorites(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildFavoriteResponses(items)
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	results, err := buildFavoriteItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddFavorites(c *fiber.Ctx) error {
@@ -1427,123 +1395,6 @@ func handleRemoveFavorites(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"deleted": deleted})
-}
-
-// ============================================================================
-// RESPONSE BUILDERS
-// ============================================================================
-
-type historyResponse struct {
-	ID        int64       `json:"id"`
-	MediaType string      `json:"media_type"`
-	MediaID   int64       `json:"media_id"`
-	SeasonID  *int64      `json:"season_id,omitempty"`
-	EpisodeID *int64      `json:"episode_id,omitempty"`
-	WatchedAt string      `json:"watched_at"`
-	Source    string      `json:"source,omitempty"`
-	Media     interface{} `json:"media,omitempty"`
-}
-
-func buildHistoryResponse(h *database.UserHistory) historyResponse {
-	resp := historyResponse{
-		ID:        h.ID,
-		MediaType: h.MediaType,
-		MediaID:   h.MediaID,
-		SeasonID:  h.SeasonID,
-		EpisodeID: h.EpisodeID,
-		WatchedAt: response.FormatTime(h.WatchedAt),
-		Source:    h.Source,
-	}
-	return resp
-}
-
-type collectionResponse struct {
-	ID          int64  `json:"id"`
-	MediaType   string `json:"media_type"`
-	MediaID     int64  `json:"media_id"`
-	CollectedAt string `json:"collected_at"`
-}
-
-func buildCollectionResponses(items []database.UserCollection) []collectionResponse {
-	results := make([]collectionResponse, 0, len(items))
-	for _, i := range items {
-		results = append(results, collectionResponse{
-			ID: i.ID, MediaType: i.MediaType, MediaID: i.MediaID,
-			CollectedAt: response.FormatTime(i.CollectedAt),
-		})
-	}
-	if results == nil {
-		results = make([]collectionResponse, 0)
-	}
-	return results
-}
-
-type watchlistResponse struct {
-	ID        int64   `json:"id"`
-	MediaType string  `json:"media_type"`
-	MediaID   int64   `json:"media_id"`
-	Rank      int     `json:"rank"`
-	Notes     *string `json:"notes,omitempty"`
-	ListedAt  string  `json:"listed_at"`
-}
-
-func buildWatchlistResponses(items []database.UserWatchlist) []watchlistResponse {
-	results := make([]watchlistResponse, 0, len(items))
-	for _, i := range items {
-		results = append(results, watchlistResponse{
-			ID: i.ID, MediaType: i.MediaType, MediaID: i.MediaID,
-			Rank: i.Rank, Notes: i.Notes,
-			ListedAt: response.FormatTime(i.ListedAt),
-		})
-	}
-	if results == nil {
-		results = make([]watchlistResponse, 0)
-	}
-	return results
-}
-
-type ratingResponse struct {
-	ID        int64  `json:"id"`
-	MediaType string `json:"media_type"`
-	MediaID   int64  `json:"media_id"`
-	Rating    int    `json:"rating"`
-	RatedAt   string `json:"rated_at"`
-}
-
-func buildRatingResponses(items []database.UserRating) []ratingResponse {
-	results := make([]ratingResponse, 0, len(items))
-	for _, i := range items {
-		results = append(results, ratingResponse{
-			ID: i.ID, MediaType: i.MediaType, MediaID: i.MediaID,
-			Rating: i.Rating, RatedAt: response.FormatTime(i.RatedAt),
-		})
-	}
-	if results == nil {
-		results = make([]ratingResponse, 0)
-	}
-	return results
-}
-
-type favoriteResponse struct {
-	ID          int64  `json:"id"`
-	MediaType   string `json:"media_type"`
-	MediaID     int64  `json:"media_id"`
-	Rank        int    `json:"rank"`
-	FavoritedAt string `json:"favorited_at"`
-}
-
-func buildFavoriteResponses(items []database.UserFavorite) []favoriteResponse {
-	results := make([]favoriteResponse, 0, len(items))
-	for _, i := range items {
-		results = append(results, favoriteResponse{
-			ID: i.ID, MediaType: i.MediaType, MediaID: i.MediaID,
-			Rank: i.Rank, FavoritedAt: response.FormatTime(i.FavoritedAt),
-		})
-	}
-	if results == nil {
-		results = make([]favoriteResponse, 0)
-	}
-	return results
 }
 
 // ============================================================================

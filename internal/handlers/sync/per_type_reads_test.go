@@ -44,6 +44,9 @@ func setupPerTypeDB(t *testing.T) *gorm.DB {
 	models := []interface{}{
 		&database.UserHistory{}, &database.UserCollection{}, &database.UserWatchlist{},
 		&database.UserRating{}, &database.UserFavorite{},
+		// The five read tables store a media_id; the item builders hydrate the
+		// media object it points at, so the media tables must exist too.
+		&database.Movie{}, &database.Show{}, &database.Episode{}, &database.Season{},
 	}
 	var db *gorm.DB
 	var err error

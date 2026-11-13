@@ -37,6 +37,56 @@ const clerkConfigured = Boolean(
 )
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL || undefined
 
+/**
+ * `is_admin` from the API, for clerk mode.
+ *
+ * Identity is Clerk's, but ADMINISTRATION is the instance's: `GET /v1/users/me`
+ * is the only thing that knows whether this account may administer this box.
+ * The bridge used to hard-code `isAdmin: false`, so an owner signing in through
+ * Clerk could never reach /admin while the same account in local mode could —
+ * a local/clerk divergence with no server-side counterpart.
+ *
+ * The request is a single read, guarded by a cancel flag; a failure leaves the
+ * flag false, and every admin route re-checks the permission server-side.
+ */
+function useInstanceAdmin(
+  isSignedIn: boolean,
+  userId: string | null,
+  getToken: () => Promise<string | null>
+): boolean {
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    // Reset first: a stale `true` must never survive an account change, and it
+    // must not survive a lookup that fails for the new account either.
+    setIsAdmin(false)
+    if (!isSignedIn || !userId) {
+      return
+    }
+    void (async () => {
+      try {
+        const token = await getToken()
+        if (!token) return
+        const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+        const res = await fetch(`${base}/v1/users/me`, {
+          headers: { authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const body = (await res.json()) as { is_admin?: boolean }
+        if (!cancelled) setIsAdmin(Boolean(body?.is_admin))
+      } catch {
+        // Leave false: the app still works, and every admin route re-checks.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isSignedIn, userId, getToken])
+
+  return isAdmin
+}
+
 /** Feed the shared context from Clerk — only ever mounted under ClerkProvider. */
 function ClerkAuthBridge({
   config,
@@ -44,6 +94,11 @@ function ClerkAuthBridge({
 }: PropsWithChildren<{ config: AuthConfig | null }>) {
   const { isSignedIn, getToken } = useAuth()
   const { user, signOut } = useClerk()
+  const isAdmin = useInstanceAdmin(
+    Boolean(isSignedIn),
+    user?.id ?? null,
+    getToken
+  )
 
   const mappedUser: AuthUser | null = user
     ? {
@@ -52,7 +107,9 @@ function ClerkAuthBridge({
         username: user.username ?? null,
         displayName: user.fullName ?? null,
         imageUrl: user.imageUrl ?? null,
-        is_admin: false,
+        // Mirrors the same instance-level flag as the context below, so a
+        // consumer reading user.is_admin cannot disagree with isAdmin.
+        is_admin: isAdmin,
       }
     : null
 
@@ -63,7 +120,7 @@ function ClerkAuthBridge({
       isLoaded: true,
       isSignedIn: Boolean(isSignedIn),
       user: mappedUser,
-      isAdmin: false,
+      isAdmin,
       getToken: () => getToken(),
       signOut: async () => {
         await signOut()
@@ -71,7 +128,7 @@ function ClerkAuthBridge({
       // Clerk owns its own session lifecycle; these are inert here.
       setSession: () => {},
     }),
-    [config, isSignedIn, mappedUser, getToken, signOut]
+    [config, isSignedIn, mappedUser, isAdmin, getToken, signOut]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
