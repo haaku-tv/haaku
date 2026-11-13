@@ -295,3 +295,93 @@ func TestHydrationFailureIsAnErrorNotASilentPage(t *testing.T) {
 		t.Fatal("buildWatchlistItems returned a page with a failed hydration; want an error")
 	}
 }
+
+// newContractApp mounts the contract-shaped reads with a stub identity, the way
+// httpapi.RegisterRoutes does after the sync group.
+func newContractApp(userID string) *fiber.App {
+	app := fiber.New()
+	v1 := app.Group("/v1")
+	v1.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", userID)
+		return c.Next()
+	})
+	RegisterContractRoutes(v1)
+	return app
+}
+
+// contractItems decodes a contract array and returns it, failing on anything
+// that is not an array.
+func contractItems(t *testing.T, app *fiber.App, path string) []map[string]any {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, path, nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Host = "example.com"
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s: status %d", path, resp.StatusCode)
+	}
+	var items []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		t.Fatalf("GET %s: decode: %v", path, err)
+	}
+	return items
+}
+
+// TestContractItemsCarryTheirMediaObject: a Trakt client renders an item from
+// the nested object, so the contract routes have to serve it — the same object
+// the internal envelope routes serve.
+func TestContractItemsCarryTheirMediaObject(t *testing.T) {
+	db := setupItemsDB(t)
+	seedItems(t, db)
+	app := newContractApp(itemsUser)
+
+	t.Run("watchlist", func(t *testing.T) {
+		items := contractItems(t, app, "/v1/sync/watchlist/movies/rank/asc")
+		if len(items) != 1 {
+			t.Fatalf("items = %d, want 1", len(items))
+		}
+		movie, ok := items[0]["movie"].(map[string]any)
+		if !ok {
+			t.Fatalf("item has no movie object: %v", items[0])
+		}
+		if movie["title"] != "Inception" {
+			t.Errorf("movie.title = %v, want Inception", movie["title"])
+		}
+		if _, ok := items[0]["rank"]; !ok {
+			t.Errorf("item lost its rank: %v", items[0])
+		}
+	})
+
+	t.Run("favorites", func(t *testing.T) {
+		items := contractItems(t, app, "/v1/sync/favorites/shows/rank/asc")
+		if len(items) != 1 {
+			t.Fatalf("items = %d, want 1", len(items))
+		}
+		show, ok := items[0]["show"].(map[string]any)
+		if !ok {
+			t.Fatalf("item has no show object: %v", items[0])
+		}
+		if show["title"] != "Breaking Bad" {
+			t.Errorf("show.title = %v, want Breaking Bad", show["title"])
+		}
+	})
+
+	t.Run("ratings", func(t *testing.T) {
+		items := contractItems(t, app, "/v1/sync/ratings/movies/8")
+		if len(items) != 1 {
+			t.Fatalf("items = %d, want 1", len(items))
+		}
+		if items[0]["rating"] != float64(8) {
+			t.Errorf("rating = %v, want 8", items[0]["rating"])
+		}
+		if _, ok := items[0]["movie"].(map[string]any); !ok {
+			t.Fatalf("item has no movie object: %v", items[0])
+		}
+	})
+}
