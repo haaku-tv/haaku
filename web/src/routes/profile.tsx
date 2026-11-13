@@ -265,6 +265,11 @@ function ProfilePage() {
                     actionLabel = 'watched'
                   else if (eventType?.startsWith('rating'))
                     actionLabel = 'rated'
+                  // The feed stores both watchlist.added and watchlist.removed,
+                  // so the exact removal value is tested before the prefix —
+                  // otherwise a removal reads as an addition.
+                  else if (eventType === 'watchlist.removed')
+                    actionLabel = 'removed from watchlist'
                   else if (eventType?.startsWith('watchlist'))
                     actionLabel = 'added to watchlist'
                   else if (eventType?.startsWith('list')) actionLabel = 'listed'
