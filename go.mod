@@ -2,7 +2,7 @@ module github.com/haaku-tv/haaku
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.14
