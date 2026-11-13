@@ -36,7 +36,7 @@ COPY --from=frontend /app/web/dist/. /
 #
 # The Go tag is pinned to the toolchain go.mod requires, so a build cannot
 # silently use a different Go than a developer does.
-FROM golang:1.26.9-trixie AS build
+FROM golang:1.26.11-trixie AS build
 ENV CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
