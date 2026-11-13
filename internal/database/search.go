@@ -299,7 +299,8 @@ func narrowByGenres(query *gorm.DB, genres []string) *gorm.DB {
 	if len(genres) == 0 {
 		return query
 	}
-	postgres := query.Dialector != nil && query.Dialector.Name() == "postgres"
+	dialect := query.Dialector
+	postgres := dialect != nil && dialect.Name() == "postgres"
 	for _, genre := range genres {
 		genre = strings.TrimSpace(genre)
 		if genre == "" {

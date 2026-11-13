@@ -599,7 +599,8 @@ func catalogueGenres(refType string) []GenreItem {
 	if refType == "shows" {
 		table = "shows"
 	}
-	if db.Dialector == nil || db.Dialector.Name() != "postgres" {
+	dialect := db.Dialector
+	if dialect == nil || dialect.Name() != "postgres" {
 		return nil
 	}
 	var names []string
