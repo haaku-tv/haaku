@@ -48,7 +48,8 @@ export function useWatchlist(params?: {
   page?: number
   limit?: number
   type?: string
-  sort?: string
+  /** One of rank, listed, added, title — the values /v1/sync/watchlist sorts by. */
+  sortBy?: string
 }) {
   const api = useApi()
 
@@ -67,7 +68,9 @@ export function useWatchlist(params?: {
       if (params?.page) searchParams.page = String(params.page)
       if (params?.limit) searchParams.limit = String(params.limit)
       if (params?.type) searchParams.type = params.type
-      if (params?.sort) searchParams.sort = params.sort
+      // `sort_by`, not `sort`: the handler reads the contract's parameter name
+      // and silently falls back to rank order for anything else.
+      if (params?.sortBy) searchParams.sort_by = params.sortBy
 
       const res = await api.GET('/v1/sync/watchlist', {
         params: { query: searchParams as Record<string, never> },
