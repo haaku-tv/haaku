@@ -67,8 +67,12 @@ func wantSyncType(c *fiber.Ctx, allowed ...string) (string, error) {
 }
 
 // handleContractCollection serves /v1/sync/collection/{type}.
+//
+// The media type is pinned by the per-type static routes (/sync/collection/
+// movies|shows, registered from perTypeReads) and taken from the {type} segment
+// otherwise, so one handler owns the contract collection shape for both.
 func handleContractCollection(c *fiber.Ctx) error {
-	mt, err := wantSyncType(c, "movie", "show", "episode")
+	mt, err := contractCollectionType(c)
 	if err != nil {
 		return err
 	}
@@ -97,6 +101,15 @@ func handleContractCollection(c *fiber.Ctx) error {
 	}
 	response.SetPaginationHeaders(c, page, limit, total, len(out))
 	return c.JSON(out)
+}
+
+// contractCollectionType is the media type this request serves: pinned by a
+// per-type static route, else Trakt's {type} segment.
+func contractCollectionType(c *fiber.Ctx) (string, error) {
+	if pinned, ok := c.Locals(forcedMediaTypeKey).(string); ok && pinned != "" {
+		return pinned, nil
+	}
+	return wantSyncType(c, "movie", "show", "episode")
 }
 
 func contractCollectionItem(db *gorm.DB, row *database.UserCollection) (map[string]any, bool) {

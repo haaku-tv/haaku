@@ -42,15 +42,28 @@ type perTypeRead struct {
 	segment   string // Trakt's path segment for that media type
 	summary   string
 	handler   fiber.Handler
+	// contractShape marks a segment that IS a Trakt path for this collection
+	// (/sync/collection/{type} has no sort segments, so /sync/collection/movies
+	// is the contract route itself rather than an extension of it). Such a
+	// variant must serve the contract's bare array, not our paginated envelope:
+	// while it served the envelope, the contract array was unreachable for
+	// movies and shows (issue #155).
+	contractShape bool
 }
 
 var perTypeReads = []perTypeRead{
 	// History: user_history stores movie and episode rows only.
 	{kind: "history", mediaType: "movie", segment: "movies", summary: "Get watched movies", handler: handleGetHistory},
 	{kind: "history", mediaType: "episode", segment: "episodes", summary: "Get watched episodes", handler: handleGetHistory},
-	// Collection: user_collection stores movie and show rows only.
-	{kind: "collection", mediaType: "movie", segment: "movies", summary: "Get collected movies", handler: handleGetCollection},
-	{kind: "collection", mediaType: "show", segment: "shows", summary: "Get collected shows", handler: handleGetCollection},
+	// Collection: user_collection stores movie and show rows only. These two
+	// segments are Trakt's own /sync/collection/{type} path, so they go through
+	// the contract collection handler (bare array) rather than the envelope.
+	{kind: "collection", mediaType: "movie", segment: "movies", summary: "Get collected movies", handler: handleContractCollection, contractShape: true},
+	{kind: "collection", mediaType: "show", segment: "shows", summary: "Get collected shows", handler: handleContractCollection, contractShape: true},
+	// Episode collection rows are real: handleAddCollection expands a season or
+	// a show-with-seasons into media_type='episode' rows, so this segment has
+	// rows to serve and is Trakt's own path for them.
+	{kind: "collection", mediaType: "episode", segment: "episodes", summary: "Get collected episodes", handler: handleContractCollection, contractShape: true},
 	// Watchlist: user_watchlist stores movie and show rows only.
 	{kind: "watchlist", mediaType: "movie", segment: "movies", summary: "Get watchlist movies", handler: handleGetWatchlist},
 	{kind: "watchlist", mediaType: "show", segment: "shows", summary: "Get watchlist shows", handler: handleGetWatchlist},
