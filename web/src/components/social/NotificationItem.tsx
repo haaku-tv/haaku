@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { Notification } from '@/api/hooks/useNotifications'
 import { activateOnKey } from '@/lib/a11y'
+import { localMediaID } from '@/lib/media-url'
 import { cn } from '@/lib/utils'
 
 const NOTIFICATION_ICONS: Record<string, React.ReactNode> = {
@@ -61,9 +62,12 @@ export function NotificationItem({
     if (notification.item) {
       const type = notification.item.type
       const id = notification.item.id
+      // A notification payload carries the item's ROW id, and the movies/shows
+      // routes read a bare number as a TMDB id — so the row-id namespace is
+      // spelled out rather than left to look like one.
       const routes: Record<string, string> = {
-        movie: `/movies/${id}`,
-        show: `/shows/${id}`,
+        movie: `/movies/${localMediaID(id)}`,
+        show: `/shows/${localMediaID(id)}`,
         episode: `/episodes/${id}`,
         list: `/lists/${id}`,
       }

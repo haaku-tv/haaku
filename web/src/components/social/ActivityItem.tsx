@@ -10,6 +10,7 @@ import {
 import type { ActivityItem as ActivityItemType } from '@/api/types'
 import { activateOnKey } from '@/lib/a11y'
 import { firstImage } from '@/lib/images'
+import { mediaID } from '@/lib/media-url'
 import { cn } from '@/lib/utils'
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
@@ -88,10 +89,16 @@ function getActivityText(item: ActivityItemType): string {
 }
 
 function getMediaLink(item: ActivityItemType): string | null {
-  if (item.movie) return `/movies/${item.movie.ids.trakt}`
+  if (item.movie) {
+    const id = mediaID(item.movie.ids)
+    return id ? `/movies/${id}` : null
+  }
   if (item.show) {
+    // Episodes are still addressed by row id: that is the id the episode route
+    // and the progress writes share.
     if (item.episode) return `/episodes/${item.episode.ids.trakt}`
-    return `/shows/${item.show.ids.trakt}`
+    const id = mediaID(item.show.ids)
+    return id ? `/shows/${id}` : null
   }
   if (item.list) return `/lists/${item.list.ids.trakt}`
   return null

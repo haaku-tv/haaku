@@ -16,6 +16,7 @@ import {
   ShimmerText,
 } from '@/components/ui'
 import { firstImage } from '@/lib/images'
+import { mediaLink } from '@/lib/media-url'
 import { formatDate } from '@/lib/utils'
 
 export const Route = createFileRoute('/people/$id')({
@@ -139,14 +140,10 @@ function PersonDetailPage() {
                   }
                   type="movie"
                   aspect="2:3"
-                  onClick={() =>
-                    navigate({
-                      to: '/movies/$id',
-                      params: {
-                        id: String(movie.ids?.trakt ?? movie.ids?.slug),
-                      },
-                    })
-                  }
+                  onClick={() => {
+                    const link = mediaLink('movie', movie.ids)
+                    if (link) navigate({ to: link.to, params: { id: link.id } })
+                  }}
                 />
               ) : null
             )}
@@ -169,12 +166,10 @@ function PersonDetailPage() {
                   }
                   type="series"
                   aspect="2:3"
-                  onClick={() =>
-                    navigate({
-                      to: '/shows/$id',
-                      params: { id: String(show.ids?.trakt ?? show.ids?.slug) },
-                    })
-                  }
+                  onClick={() => {
+                    const link = mediaLink('show', show.ids)
+                    if (link) navigate({ to: link.to, params: { id: link.id } })
+                  }}
                 />
               ) : null
             )}

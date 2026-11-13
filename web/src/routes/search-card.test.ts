@@ -45,9 +45,19 @@ describe('cardOf — navigate only into rows that exist', () => {
     expect(card?.tmdbId).toBe(1396)
   })
 
-  it('navigates a catalogue hit by its local id', () => {
+  // The URL carries the TMDB id, not the local row id: row 1 addresses a
+  // different title on every install, and stops addressing this one after a
+  // catalogue rebuild.
+  it('navigates a catalogue hit by its TMDB id', () => {
     const card = cardOf(catalogHit())
     expect(card?.inCatalog).toBe(true)
-    expect(card?.navigateTo).toEqual({ to: '/shows/$id', id: '1' })
+    expect(card?.navigateTo).toEqual({ to: '/shows/$id', id: '95396' })
+  })
+
+  it('falls back to the slug when the row carries no TMDB id', () => {
+    const hit = catalogHit()
+    if (hit.show) hit.show.ids.tmdb = 0
+    const card = cardOf(hit)
+    expect(card?.navigateTo).toEqual({ to: '/shows/$id', id: 'severance' })
   })
 })

@@ -6,6 +6,7 @@ import type { PlaybackItem } from '@/api/types'
 import { Page, PosterGrid, Section } from '@/components/layout'
 import { ProgressBar } from '@/components/social/ProgressBar'
 import { FilterPill, PosterCard } from '@/components/ui'
+import { mediaLink } from '@/lib/media-url'
 
 type MediaFilter = 'all' | 'movies' | 'shows'
 
@@ -102,10 +103,13 @@ function ProgressPage() {
                   : ''
 
               const onClick = () => {
-                if (item.movie)
-                  navigate({ to: `/movies/${item.movie.ids.trakt}` })
-                else if (item.show)
-                  navigate({ to: `/shows/${item.show.ids.trakt}` })
+                if (item.movie) {
+                  const link = mediaLink('movie', item.movie.ids)
+                  if (link) navigate({ to: link.to, params: { id: link.id } })
+                } else if (item.show) {
+                  const link = mediaLink('show', item.show.ids)
+                  if (link) navigate({ to: link.to, params: { id: link.id } })
+                }
               }
 
               return (

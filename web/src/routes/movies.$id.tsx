@@ -36,6 +36,7 @@ import {
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
 import { firstImage } from '@/lib/images'
+import { mediaLink } from '@/lib/media-url'
 import { cn, formatDate, formatRuntime } from '@/lib/utils'
 
 export const Route = createFileRoute('/movies/$id')({
@@ -339,12 +340,10 @@ function MovieDetailPage() {
                 rating={m.rating ? (m.rating / 2).toFixed(1) : undefined}
                 type="movie"
                 aspect="2:3"
-                onClick={() =>
-                  navigate({
-                    to: '/movies/$id',
-                    params: { id: String(m.ids?.trakt ?? m.ids?.slug) },
-                  })
-                }
+                onClick={() => {
+                  const link = mediaLink('movie', m.ids)
+                  if (link) navigate({ to: link.to, params: { id: link.id } })
+                }}
               />
             ))}
           </Rail>
