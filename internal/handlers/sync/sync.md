@@ -52,23 +52,29 @@ a route that could only ever answer `[]` would be a stub, and is not registered:
 
 **Response shape decision — two shapes, chosen by the path, not the collection.**
 
-- **A path Trakt owns answers Trakt's shape.** `/sync/collection/movies` and
-  `/sync/collection/shows` are in the vendored contract, so they serve its bare
-  array of collected items, each with the media object nested under `movie` /
-  `show` (title, year, `ids`, `images`, …) and `collected_at` / `updated_at`.
-  `contractShape: true` on the `perTypeReads` entry marks them, and their
-  handler is the contract collection handler, which reads the *pinned* media
-  type instead of a `{type}` segment. They used to answer the envelope below,
-  which made the contract array unreachable for those two values (#155).
+- **A path Trakt owns answers Trakt's shape.** `/sync/collection/movies`,
+  `/sync/collection/shows`, `/sync/watchlist/{type}/{sort_by}/{sort_how}`,
+  `/sync/favorites/{type}/{sort_by}/{sort_how}` and
+  `/sync/ratings/{type}/{rating}` are in the vendored contract, so they serve
+  its bare array of items, each with the media object nested under `movie` /
+  `show` / `episode` / `season` (title, year, `ids`, `images`, …) beside the
+  row's own `rank` / `listed_at` / `rated_at` / `collected_at`. `contractShape:
+  true` on the `perTypeReads` entry marks the three per-type collection
+  segments, and their handler is the contract collection handler, which reads
+  the *pinned* media type instead of a `{type}` segment; the other contract
+  reads hydrate through the same item builders as the envelope routes below, so
+  the nested object is the one the media endpoints serve. The collection
+  segments used to answer the envelope, which made the contract array
+  unreachable for those two values (#155).
 - **Our own routes answer our envelope:** `/v1/sync/{collection}` and the
   per-type segments that are *not* in the contract (`/sync/history/movies`,
   `/sync/watchlist/movies`, `/sync/ratings/seasons`, `/sync/favorites/shows`, …)
   return `{"items": [...], "page", "limit", "row_count"}` with the row fields
-  (`id`, `media_type`, `media_id`, and the collection's stored timestamp —
-  `watched_at` / `collected_at` / `listed_at` / `rated_at` / `favorited_at`).
-  Those rows are not joined to their media and our canonical ids are internal —
-  the external `trakt`/`tmdb`/`imdb` ids live in `external_ids`, which those
-  reads do not touch.
+  (`id`, `media_type`, `media_id`, the collection's stored timestamp —
+  `watched_at` / `collected_at` / `listed_at` / `rated_at` / `favorited_at` —
+  and now the same nested media object, so one item shape serves both). The
+  extra `media_type`/`media_id` pair is what those routes carry that the
+  contract does not ask for.
 
 So the asymmetry is the contract's own: of the five collections, only collection
 has per-type paths in the vendored document. Unifying the two shapes

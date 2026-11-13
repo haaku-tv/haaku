@@ -178,14 +178,9 @@ func handleContractFavorites(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	out := make([]map[string]any, 0, len(rows))
-	for i := range rows {
-		out = append(out, map[string]any{
-			"rank":      rows[i].Rank,
-			"id":        rows[i].ID,
-			"listed_at": contractshape.Timestamp(rows[i].FavoritedAt),
-			"type":      rows[i].MediaType,
-		})
+	out, err := buildFavoriteItems(db, rows)
+	if err != nil {
+		return response.InternalError(c)
 	}
 	response.SetPaginationHeaders(c, page, limit, total, len(out))
 	return c.JSON(out)
@@ -217,14 +212,9 @@ func handleContractWatchlist(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	out := make([]map[string]any, 0, len(rows))
-	for i := range rows {
-		out = append(out, map[string]any{
-			"rank":      rows[i].Rank,
-			"id":        rows[i].ID,
-			"listed_at": contractshape.Timestamp(rows[i].ListedAt),
-			"type":      rows[i].MediaType,
-		})
+	out, err := buildWatchlistItems(db, rows)
+	if err != nil {
+		return response.InternalError(c)
 	}
 	response.SetPaginationHeaders(c, page, limit, total, len(out))
 	return c.JSON(out)
@@ -258,14 +248,9 @@ func handleContractRatings(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	out := make([]map[string]any, 0, len(rows))
-	for i := range rows {
-		out = append(out, map[string]any{
-			"rated_at": contractshape.Timestamp(rows[i].RatedAt),
-			"rating":   rows[i].Rating,
-			"type":     rows[i].MediaType,
-			"id":       rows[i].MediaID,
-		})
+	out, err := buildRatingItems(db, rows)
+	if err != nil {
+		return response.InternalError(c)
 	}
 	response.SetPaginationHeaders(c, page, limit, total, len(out))
 	return c.JSON(out)
