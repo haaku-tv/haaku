@@ -41,8 +41,9 @@ func TestCollectionSegmentsEachServeTheirOwnType(t *testing.T) {
 	}{
 		{"/v1/sync/collection/movies", "movie", 111},
 		{"/v1/sync/collection/shows", "show", 211},
-		// The :type route, for a segment that has no static registration.
-		{"/v1/sync/collection/episodes", "", 0},
+		// The third static registration; all three are Trakt paths, so all
+		// three must answer the contract array with their own media type.
+		{"/v1/sync/collection/episodes", "episode", 201},
 		// Repeated in the reverse order: a pool-reuse leak would flip a value.
 		{"/v1/sync/collection/shows", "show", 211},
 		{"/v1/sync/collection/movies", "movie", 111},
@@ -56,14 +57,6 @@ func TestCollectionSegmentsEachServeTheirOwnType(t *testing.T) {
 		var items []map[string]any
 		if err := json.Unmarshal(raw, &items); err != nil {
 			t.Fatalf("GET %s: not a contract array: %v (%s)", tc.path, err, raw)
-		}
-		if tc.wantType == "" {
-			// No episode fixture is seeded for the collection, so an empty
-			// array is the honest answer — but it must still be an array.
-			if items == nil {
-				t.Fatalf("GET %s: body is null, want []", tc.path)
-			}
-			continue
 		}
 		if len(items) != 1 {
 			t.Fatalf("GET %s: %d items, want 1 (%s)", tc.path, len(items), raw)
