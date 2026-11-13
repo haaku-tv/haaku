@@ -337,6 +337,11 @@ func seedFixtures(db *gorm.DB, fx *Fixtures) error {
 	collection := []database.UserCollection{
 		{UserID: uid, MediaType: "movie", MediaID: movie.ID, CollectedAt: now.Add(-72 * time.Hour)},
 		{UserID: uid, MediaType: "episode", MediaID: episodes[0].ID, CollectedAt: now.Add(-72 * time.Hour)},
+		// A show too: /sync/collection/shows is a graded contract path, and with
+		// no show row the harness can only ever report "no fixture row to
+		// validate" — an assertion that never runs looks the same as one that
+		// passes.
+		{UserID: uid, MediaType: "show", MediaID: show.ID, CollectedAt: now.Add(-72 * time.Hour)},
 	}
 	for i := range collection {
 		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&collection[i]).Error; err != nil {

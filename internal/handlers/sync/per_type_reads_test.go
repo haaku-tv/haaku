@@ -45,7 +45,9 @@ func setupPerTypeDB(t *testing.T) *gorm.DB {
 		&database.UserHistory{}, &database.UserCollection{}, &database.UserWatchlist{},
 		&database.UserRating{}, &database.UserFavorite{},
 		// The five read tables store a media_id; the item builders hydrate the
-		// media object it points at, so the media tables must exist too.
+		// media object it points at (the per-type collection routes serve the
+		// contract shape, whose item embeds it), so the media tables must exist
+		// too.
 		&database.Movie{}, &database.Show{}, &database.Episode{}, &database.Season{},
 	}
 	var db *gorm.DB
@@ -94,6 +96,18 @@ func seedPerTypeRows(t *testing.T, db *gorm.DB) map[string][]int64 {
 		"history/episode": {201},
 	}
 
+	// The media rows the collection fixtures point at. The collection contract
+	// item embeds the movie/show object, so a row whose media is missing is
+	// omitted from the response rather than served bare.
+	seed(&database.Movie{ID: 111, TmdbID: 1110, Title: "Collection Movie"})
+	seed(&database.Movie{ID: 112, TmdbID: 1120, Title: "Another User's Movie"})
+	seed(&database.Show{ID: 211, TmdbID: 2110, Title: "Collection Show"})
+	seed(&database.Show{ID: 212, TmdbID: 2120, Title: "Another User's Show"})
+	// A collected episode needs its season and show to build the contract
+	// episode object.
+	seed(&database.Season{ID: 11, ShowID: 211, SeasonNumber: 1})
+	seed(&database.Episode{ID: 201, ShowID: 211, SeasonID: 11, EpisodeNumber: 1, Title: "Collection Episode"})
+
 	// History: two movies (for pagination) and one episode, caller-scoped.
 	seed(&database.UserHistory{UserID: perTypeUser, MediaType: "movie", MediaID: 101, WatchedAt: ts(0), CreatedAt: ts(0)})
 	seed(&database.UserHistory{UserID: perTypeUser, MediaType: "movie", MediaID: 103, WatchedAt: ts(20), CreatedAt: ts(20)})
@@ -106,8 +120,10 @@ func seedPerTypeRows(t *testing.T, db *gorm.DB) map[string][]int64 {
 	seed(&database.UserCollection{UserID: perTypeUser, MediaType: "show", MediaID: 211, CollectedAt: ts(1), CreatedAt: ts(1)})
 	seed(&database.UserCollection{UserID: perTypeOther, MediaType: "movie", MediaID: 112, CollectedAt: ts(0), CreatedAt: ts(0)})
 	seed(&database.UserCollection{UserID: perTypeOther, MediaType: "show", MediaID: 212, CollectedAt: ts(0), CreatedAt: ts(0)})
+	seed(&database.UserCollection{UserID: perTypeUser, MediaType: "episode", MediaID: 201, CollectedAt: ts(2), CreatedAt: ts(2)})
 	want["collection/movie"] = []int64{111}
 	want["collection/show"] = []int64{211}
+	want["collection/episode"] = []int64{201}
 
 	// Watchlist: movie + show.
 	seed(&database.UserWatchlist{UserID: perTypeUser, MediaType: "movie", MediaID: 121, Rank: 1, ListedAt: ts(0), CreatedAt: ts(0)})
@@ -164,7 +180,7 @@ func newPerTypeApp(userID string) *fiber.App {
 func TestPerTypeReadsAreDeclaredOnlyForBackedMediaTypes(t *testing.T) {
 	backed := map[string]bool{
 		"history/movie": true, "history/episode": true,
-		"collection/movie": true, "collection/show": true,
+		"collection/movie": true, "collection/show": true, "collection/episode": true,
 		"watchlist/movie": true, "watchlist/show": true,
 		"ratings/movie": true, "ratings/show": true, "ratings/season": true, "ratings/episode": true,
 		"favorites/movie": true, "favorites/show": true,
@@ -188,7 +204,7 @@ func TestPerTypeReadsAreDeclaredOnlyForBackedMediaTypes(t *testing.T) {
 	for _, absent := range []string{
 		"history/show", "history/season", // user_history stores movie|episode only
 		"watchlist/season", "watchlist/episode", // user_watchlist stores movie|show only
-		"collection/season", "collection/episode", // user_collection stores movie|show only
+		"collection/season", // season rows expand to their episode rows
 	} {
 		if declared[absent] {
 			t.Errorf("variant %s must not be registered: no rows of that media type exist to serve", absent)
@@ -212,17 +228,45 @@ func TestPerTypeReadsReturnOnlyPinnedTypeForCaller(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("GET %s: expected 200, got %d (%s)", path, status, raw)
 			}
-			var body perTypeBody
-			if err := json.Unmarshal(raw, &body); err != nil {
-				t.Fatalf("decode %s: %v (%s)", path, err, raw)
-			}
 
-			got := make([]int64, 0, len(body.Items))
-			for _, item := range body.Items {
-				if item.MediaType != r.mediaType {
-					t.Errorf("%s returned a %q row — the route is not pinned", path, item.MediaType)
+			var got []int64
+			var rowCount int64
+			if r.contractShape {
+				// Trakt's own path for this collection: a bare array of items,
+				// each with the media object nested under its type.
+				var items []map[string]any
+				if err := json.Unmarshal(raw, &items); err != nil {
+					t.Fatalf("decode %s as a contract array: %v (%s)", path, err, raw)
 				}
-				got = append(got, item.MediaID)
+				for _, item := range items {
+					if item["type"] != r.mediaType {
+						t.Errorf("%s returned a %v row — the route is not pinned", path, item["type"])
+					}
+					media, ok := item[r.mediaType].(map[string]any)
+					if !ok {
+						t.Errorf("%s item has no %q object: %v", path, r.mediaType, item)
+						continue
+					}
+					mediaID, ok := media["ids"].(map[string]any)["trakt"].(float64)
+					if !ok {
+						t.Errorf("%s item has no ids.trakt: %v", path, media)
+						continue
+					}
+					got = append(got, int64(mediaID))
+				}
+				rowCount = int64(len(got))
+			} else {
+				var body perTypeBody
+				if err := json.Unmarshal(raw, &body); err != nil {
+					t.Fatalf("decode %s: %v (%s)", path, err, raw)
+				}
+				for _, item := range body.Items {
+					if item.MediaType != r.mediaType {
+						t.Errorf("%s returned a %q row — the route is not pinned", path, item.MediaType)
+					}
+					got = append(got, item.MediaID)
+				}
+				rowCount = body.RowCount
 			}
 			if len(got) == 0 {
 				t.Fatalf("%s returned no rows for a seeded %s fixture", path, r.mediaType)
@@ -234,11 +278,8 @@ func TestPerTypeReadsReturnOnlyPinnedTypeForCaller(t *testing.T) {
 			if fmt.Sprint(got) != fmt.Sprint(expected) {
 				t.Errorf("%s returned media ids %v, want %v", path, got, expected)
 			}
-			if body.RowCount != int64(len(expected)) {
-				t.Errorf("%s row_count = %d, want %d", path, body.RowCount, len(expected))
-			}
-			if body.Page != 1 || body.Limit != 25 {
-				t.Errorf("%s page/limit = %d/%d, want 1/25", path, body.Page, body.Limit)
+			if rowCount != int64(len(expected)) {
+				t.Errorf("%s row_count = %d, want %d", path, rowCount, len(expected))
 			}
 		})
 	}
@@ -263,6 +304,14 @@ func TestPerTypeReadsEmptyIsArrayNotNull(t *testing.T) {
 			}
 			// Decode into raw messages: a decoded []byte cannot tell [] from
 			// null, and null is exactly the shape Trakt clients crash on.
+			if r.contractShape {
+				// A contract collection answers a bare array: "[]" here, never
+				// "null".
+				if got := string(raw); got != "[]" {
+					t.Errorf("body = %s, want []", got)
+				}
+				return
+			}
 			var envelope map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &envelope); err != nil {
 				t.Fatalf("decode envelope: %v (%s)", err, raw)

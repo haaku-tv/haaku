@@ -11,7 +11,7 @@ path (modulo our `/v1` prefix), with a real 2xx — except the recommendation/re
 engine, which stays an honest `501 not_implemented` and graded `blocked-engine` by
 the owner's carve-out. Done is `go run ./cmd/parity`, not a PR count.
 
-Contract operations: **336**. Not yet served (**in scope**): **64**. Out by owner decision: **33**. Served today: **239**.
+Contract operations: **336**. Not yet served (**in scope**): **63**. Out by owner decision: **33**. Served today: **240**.
 
 ## Out of scope (owner decisions, re-affirmed)
 
@@ -94,7 +94,6 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /sync/collection/minimal/episodes` | divergent | remaining sync reads and writes | #106 |
 | `GET /sync/collection/minimal/movies` | divergent | remaining sync reads and writes | #106 |
 | `GET /sync/collection/minimal/shows` | divergent | remaining sync reads and writes | #106 |
-| `GET /sync/collection/{type}` | divergent | remaining sync reads and writes | #106 |
 | `GET /sync/progress/up_next_nitro` | divergent | remaining sync reads and writes | #106 |
 | `GET /sync/watchlist/{type}/{sort_by}/{sort_how}` | divergent | remaining sync reads and writes | #106 |
 | `GET /users/hidden/dropped` | out-of-scope | per-section hidden item lists | #108 |
@@ -252,9 +251,10 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /shows/{id}/watchnow/{country}` | `GET /v1/shows/{id}/watchnow/{country}` |
 | `GET /smart-lists/{list_id}` | `GET /v1/smart-lists/{id}` |
 | `GET /smart-lists/{list_id}/items` | `GET /v1/smart-lists/{id}/items` |
-| `GET /sync/collection/episodes` | `GET /v1/sync/collection/{type}` |
+| `GET /sync/collection/episodes` | `GET /v1/sync/collection/episodes` |
 | `GET /sync/collection/movies` | `GET /v1/sync/collection/movies` |
 | `GET /sync/collection/shows` | `GET /v1/sync/collection/shows` |
+| `GET /sync/collection/{type}` | `GET /v1/sync/collection/{type}` |
 | `GET /sync/favorites/{type}/{sort_by}/{sort_how}` | `GET /v1/sync/favorites/{type}/{sort_by}/{sort_how}` |
 | `GET /sync/history/{type}/{id}` | `GET /v1/sync/history/{media_type}/{media_id}` |
 | `GET /sync/last_activities` | `GET /v1/sync/last_activities` |

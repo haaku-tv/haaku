@@ -337,15 +337,15 @@ sections:
   - trakt: GET /sync/collection/movies
     ours: GET /v1/sync/collection/movies
     status: implemented
-    rationale: 'Landed as a per-type read: the collection handler with media_type pinned to ''movie'' by the path segment, Trakt''s exact path.'
+    rationale: 'Trakt''s exact path, served by the contract collection handler: the path segment pins media_type to ''movie'' and the body is the contract''s bare array of collected items with the movie object nested under `movie`.'
   - trakt: GET /sync/collection/shows
     ours: GET /v1/sync/collection/shows
     status: implemented
-    rationale: Landed as a per-type read pinned to media_type='show'.
+    rationale: 'Trakt''s exact path, served by the contract collection handler with media_type pinned to ''show''; the body is the contract''s bare array with the show object nested under `show`.'
   - trakt: GET /sync/collection/episodes
-    ours: GET /v1/sync/collection/{type}
+    ours: GET /v1/sync/collection/episodes
     status: implemented
-    rationale: Episode rows in user_collection are the source of truth; seasons and shows with seasons expand to their episode rows, and the generic contract collection route returns Trakt's collected-episode shape for type=episodes.
+    rationale: Episode rows in user_collection are the source of truth — handleAddCollection expands a season, or a show with seasons, into media_type='episode' rows — and this segment serves them as the contract's bare array with the episode object nested under `episode` and its show under `show`.
   - trakt: GET /sync/watchlist/{type}/{sort_by}/{sort_how}
     ours: GET /v1/sync/watchlist/{type}/{sort_by}/{sort_how}
     status: divergent
@@ -366,9 +366,9 @@ sections:
     rationale: 'Served at the contract path shape: the single-item read returns the caller''s rows with the contract''s id, watched_at, action and type fields.'
   - trakt: GET /sync/collection/{type}
     ours: GET /v1/sync/collection/{type}
-    status: divergent
-    rationale: The generic path is served for episodes as the contract's bare array; movies and shows are shadowed by the existing static per-type routes, which return our paginated envelope.
-    compat: 'episodes: bare contract array; movies|shows: the static /v1/sync/collection/{movies,shows} routes win and return the paginated envelope, so those two values are not yet contract-shaped.'
+    status: implemented
+    rationale: 'The bare contract array for all three servable types. The static /v1/sync/collection/{movies,shows} routes are registered from the same per-type table and delegate to the contract collection handler, which reads the pinned media type instead of the {type} segment, so no value of {type} is answered by the paginated envelope (issue #155). user_collection stores movie and show rows; episodes are the stored episode rows of a collected show or season.'
+    compat: 'movies, shows and episodes answer the contract array; seasons is not a storable collection row and answers 400.'
   - trakt: GET /sync/watchlist/movies
     ours: GET /v1/sync/watchlist/movies
     status: implemented

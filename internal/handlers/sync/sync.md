@@ -45,23 +45,35 @@ a route that could only ever answer `[]` would be a stub, and is not registered:
 | Collection | `media_type` stored | Variants served | Variants blocked, and why |
 |---|---|---|---|
 | `user_history` (0006) | `movie`, `episode` | `/history/movies`, `/history/episodes` | `/history/shows`, `/history/seasons` — we store no show/season history row. Trakt's `shows`/`seasons` variants are the *episode* rows with an embedded `show`/`season` object; the history row carries `season_id`/`episode_id` but no show identity, so a `shows` variant would return a byte-identical duplicate of `/history/episodes` labelled `media_type: "episode"`. Serving it needs the embedded media object (a shape change), or a show-level history row — a separate piece of work. |
-| `user_collection` (0007) | `movie`, `show`, `episode` | `/collection/movies`, `/collection/shows`; `/collection/episodes` is a dedicated Trakt-shaped read (issue #71), not a pinned row variant | `/collection/seasons` — season writes expand to their episode rows, so no season-level collection row exists. The episode rows are real: `handleAddCollection` expands seasons and shows with seasons to `media_type='episode'` rows. |
+| `user_collection` (0007) | `movie`, `show`, `episode` | `/collection/movies`, `/collection/shows` — the only per-type segments that are Trakt paths, so they answer Trakt's collected array (see "Response shape decision"); `/collection/episodes` is a dedicated Trakt-shaped read (issue #71) | `/collection/seasons` — season writes expand to their episode rows, so no season-level collection row exists. The episode rows are real: `handleAddCollection` expands seasons and shows with seasons to `media_type='episode'` rows. |
 | `user_watchlist` (0008) | `movie`, `show` | `/watchlist/movies`, `/watchlist/shows` | `/watchlist/seasons`, `/watchlist/episodes` — same gap: `user_watchlist` is movie/show only and watchlist add accepts nothing else. |
 | `user_ratings` (0009) | `movie`, `show`, `season`, `episode` | `/ratings/movies`, `/ratings/shows`, `/ratings/seasons`, `/ratings/episodes` | none — all four are real `media_type` values on this table. |
 | `user_favorites` (0010) | `movie`, `show` | `/favorites/movies`, `/favorites/shows` | none beyond the issue's list: favorites are movie/show only, which is exactly what Trakt's favorites endpoint offers. |
 
-**Response shape decision.** A per-type response is the mixed list's envelope
-(`{"items": [...], "page", "limit", "row_count"}`) with the same row fields
-(`id`, `media_type`, `media_id`, and the collection's stored timestamp —
-`watched_at` / `collected_at` / `listed_at` / `rated_at` / `favorited_at`).
-It is deliberately **not** Trakt's nested `movie`/`show`/`episode` object with
-an `ids` block: our sync rows are not joined to their media (the mixed lists
-don't join either), and our canonical ids are internal — the external
-`trakt`/`tmdb`/`imdb` ids live in `external_ids`, which a read of these
-collections does not currently touch. Turning one per-type route into Trakt's
-media-object shape while its mixed twin stayed row-shaped would be worse than
-either consistency or parity; the object shape is a follow-up across all five
-collections (and belongs with the `shows`/`seasons` history variants above).
+**Response shape decision — two shapes, chosen by the path, not the collection.**
+
+- **A path Trakt owns answers Trakt's shape.** `/sync/collection/movies` and
+  `/sync/collection/shows` are in the vendored contract, so they serve its bare
+  array of collected items, each with the media object nested under `movie` /
+  `show` (title, year, `ids`, `images`, …) and `collected_at` / `updated_at`.
+  `contractShape: true` on the `perTypeReads` entry marks them, and their
+  handler is the contract collection handler, which reads the *pinned* media
+  type instead of a `{type}` segment. They used to answer the envelope below,
+  which made the contract array unreachable for those two values (#155).
+- **Our own routes answer our envelope:** `/v1/sync/{collection}` and the
+  per-type segments that are *not* in the contract (`/sync/history/movies`,
+  `/sync/watchlist/movies`, `/sync/ratings/seasons`, `/sync/favorites/shows`, …)
+  return `{"items": [...], "page", "limit", "row_count"}` with the row fields
+  (`id`, `media_type`, `media_id`, and the collection's stored timestamp —
+  `watched_at` / `collected_at` / `listed_at` / `rated_at` / `favorited_at`).
+  Those rows are not joined to their media and our canonical ids are internal —
+  the external `trakt`/`tmdb`/`imdb` ids live in `external_ids`, which those
+  reads do not touch.
+
+So the asymmetry is the contract's own: of the five collections, only collection
+has per-type paths in the vendored document. Unifying the two shapes
+across all five collections is a separate piece of work (and belongs with the
+`shows`/`seasons` history variants above).
 
 **`?extended=min` / `?minimal` — decided, not implemented.** The narrowing the
 issue asks for exists to drop Trakt's extra payload (translations, images,
