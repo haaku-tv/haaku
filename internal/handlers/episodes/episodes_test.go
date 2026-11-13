@@ -162,7 +162,7 @@ func TestGetEpisodeHandler(t *testing.T) {
 			ShowID        int64  `json:"show_id"`
 			EpisodeNumber int    `json:"episode_number"`
 			Title         string `json:"title"`
-			SeasonDetail *struct {
+			SeasonDetail  *struct {
 				SeasonNumber int `json:"season_number"`
 			} `json:"season_detail"`
 			Show *struct {
