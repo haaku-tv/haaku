@@ -244,23 +244,43 @@ function ProfilePage() {
               <SectionHead title="Recent Activity" />
               <div className="space-y-3">
                 {activity.slice(0, 10).map((item: unknown, i: number) => {
+                  // The endpoint emits {event_type, created_at, media_type,
+                  // media_id, payload} — not {action, timestamp, media}. Reading
+                  // the wrong names showed "interacted with Unknown" with no
+                  // date on every row.
                   const act = item as Record<string, unknown>
-                  const action = act.action as string | undefined
-                  const timestamp = act.timestamp as string | undefined
-                  const media = act.media as Record<string, unknown> | undefined
-                  const mediaTitle =
-                    (media?.title as string) ??
-                    (media?.name as string) ??
-                    'Unknown'
+                  const eventType = act.event_type as string | undefined
+                  const timestamp = act.created_at as string | undefined
+                  const mediaType = act.media_type as string | undefined
+                  const payload = act.payload as
+                    | Record<string, unknown>
+                    | undefined
+                  const payloadTitle =
+                    (payload?.title as string) ??
+                    (payload?.name as string) ??
+                    undefined
 
                   let actionLabel = 'interacted with'
-                  if (action === 'watch') actionLabel = 'watched'
-                  else if (action === 'rate') actionLabel = 'rated'
-                  else if (action === 'watchlist')
+                  if (eventType === 'watch' || eventType === 'watched')
+                    actionLabel = 'watched'
+                  else if (eventType?.startsWith('rating'))
+                    actionLabel = 'rated'
+                  else if (eventType?.startsWith('watchlist'))
                     actionLabel = 'added to watchlist'
-                  else if (action === 'list_add') actionLabel = 'added to list'
-                  else if (action === 'favorite') actionLabel = 'favorited'
-                  else if (action === 'comment') actionLabel = 'commented on'
+                  else if (eventType?.startsWith('list')) actionLabel = 'listed'
+                  else if (eventType?.startsWith('favorite'))
+                    actionLabel = 'favorited'
+                  else if (eventType?.startsWith('comment'))
+                    actionLabel = 'commented on'
+
+                  // The feed carries no title of its own unless the event's
+                  // payload does, so fall back to the media type and id it
+                  // does carry rather than inventing a name.
+                  const mediaTitle =
+                    payloadTitle ??
+                    (mediaType
+                      ? `${mediaType} #${String(act.media_id ?? '?')}`
+                      : '')
 
                   return (
                     <Card key={i} className="flex-row items-center gap-4 p-4">
@@ -270,8 +290,8 @@ function ProfilePage() {
                         </div>
                         <div>
                           <p className="text-sm text-sf-ink">
-                            <span className="font-medium">{actionLabel}</span>{' '}
-                            {mediaTitle}
+                            <span className="font-medium">{actionLabel}</span>
+                            {mediaTitle ? ` ${mediaTitle}` : ''}
                           </p>
                           {timestamp && (
                             <p className="text-xs text-sf-ink-faint">

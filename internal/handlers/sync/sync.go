@@ -133,8 +133,8 @@ func handleGetHistory(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildHistoryItems(db, items)
-	return writeCollectionPage(c, results, page, limit, total, len(results))
+	results, err := buildHistoryItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 // handleGetHistoryItem returns history for a specific media item.
@@ -590,8 +590,8 @@ func handleGetCollection(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildCollectionItems(db, items)
-	return writeCollectionPage(c, results, page, limit, total, len(results))
+	results, err := buildCollectionItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddCollection(c *fiber.Ctx) error {
@@ -654,8 +654,8 @@ func handleGetWatchlist(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildWatchlistItems(db, items)
-	return writeCollectionPage(c, results, page, limit, total, len(results))
+	results, err := buildWatchlistItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddWatchlist(c *fiber.Ctx) error {
@@ -934,8 +934,8 @@ func handleGetRatings(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildRatingItems(db, items)
-	return writeCollectionPage(c, results, page, limit, total, len(results))
+	results, err := buildRatingItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 // ratingEpisode is the episode reference accepted by POST /v1/sync/ratings.
@@ -1216,8 +1216,8 @@ func handleGetFavorites(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	results := buildFavoriteItems(db, items)
-	return writeCollectionPage(c, results, page, limit, total, len(results))
+	results, err := buildFavoriteItems(db, items)
+	return writeItems(c, results, err, page, limit, total)
 }
 
 func handleAddFavorites(c *fiber.Ctx) error {

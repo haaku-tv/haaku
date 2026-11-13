@@ -179,69 +179,88 @@ func historyRefs(rows []database.UserHistory) []contractshape.MediaRef {
 }
 
 // buildWatchlistItems hydrates a page of watchlist rows.
-func buildWatchlistItems(db *gorm.DB, rows []database.UserWatchlist) []map[string]any {
-	media := contractshape.MediaObjects(db, watchlistRefs(rows))
+func buildWatchlistItems(db *gorm.DB, rows []database.UserWatchlist) ([]map[string]any, error) {
+	media, err := contractshape.MediaObjects(db, watchlistRefs(rows))
+	if err != nil {
+		return nil, err
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
 		out = append(out, watchlistItem(&rows[i], media))
 	}
-	return out
+	return out, nil
 }
 
 // buildFavoriteItems hydrates a page of favorites rows.
-func buildFavoriteItems(db *gorm.DB, rows []database.UserFavorite) []map[string]any {
-	media := contractshape.MediaObjects(db, favoriteRefs(rows))
+func buildFavoriteItems(db *gorm.DB, rows []database.UserFavorite) ([]map[string]any, error) {
+	media, err := contractshape.MediaObjects(db, favoriteRefs(rows))
+	if err != nil {
+		return nil, err
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
 		out = append(out, favoriteItem(&rows[i], media))
 	}
-	return out
+	return out, nil
 }
 
 // buildRatingItems hydrates a page of rating rows.
-func buildRatingItems(db *gorm.DB, rows []database.UserRating) []map[string]any {
-	media := contractshape.MediaObjects(db, ratingRefs(rows))
+func buildRatingItems(db *gorm.DB, rows []database.UserRating) ([]map[string]any, error) {
+	media, err := contractshape.MediaObjects(db, ratingRefs(rows))
+	if err != nil {
+		return nil, err
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
 		out = append(out, ratingItem(&rows[i], media))
 	}
-	return out
+	return out, nil
 }
 
 // buildCollectionItems hydrates a page of collection rows.
-func buildCollectionItems(db *gorm.DB, rows []database.UserCollection) []map[string]any {
-	media := contractshape.MediaObjects(db, collectionRefs(rows))
+func buildCollectionItems(db *gorm.DB, rows []database.UserCollection) ([]map[string]any, error) {
+	media, err := contractshape.MediaObjects(db, collectionRefs(rows))
+	if err != nil {
+		return nil, err
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
 		out = append(out, collectionItem(&rows[i], media))
 	}
-	return out
+	return out, nil
 }
 
 // buildHistoryItems hydrates a page of history rows. Episode rows need one
 // extra lookup — an episode object does not carry its show — so the parents are
 // resolved for the whole page at once rather than per row.
-func buildHistoryItems(db *gorm.DB, rows []database.UserHistory) []map[string]any {
-	media := contractshape.MediaObjects(db, historyRefs(rows))
-	episodeShows, shows := historyEpisodeShows(db, rows)
-	for ref, obj := range contractshape.MediaObjects(db, shows) {
-		media[ref] = obj
+func buildHistoryItems(db *gorm.DB, rows []database.UserHistory) ([]map[string]any, error) {
+	media, episodeShows, err := historyMedia(db, rows)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
 		out = append(out, historyItem(&rows[i], media, episodeShows))
 	}
-	return out
+	return out, nil
 }
 
 // buildHistoryItem hydrates one history row.
-func buildHistoryItem(db *gorm.DB, h *database.UserHistory) map[string]any {
-	media := contractshape.MediaObjects(db, historyRefs([]database.UserHistory{*h}))
-	episodeShows, shows := historyEpisodeShows(db, []database.UserHistory{*h})
-	for ref, obj := range contractshape.MediaObjects(db, shows) {
-		media[ref] = obj
+func buildHistoryItem(db *gorm.DB, h *database.UserHistory) (map[string]any, error) {
+	media, episodeShows, err := historyMedia(db, []database.UserHistory{*h})
+	if err != nil {
+		return nil, err
 	}
-	return historyItem(h, media, episodeShows)
+	return historyItem(h, media, episodeShows), nil
+}
+
+// writeItems writes a collection page from a builder's two results, turning a
+// failed hydration into a 500 rather than a page with its media stripped.
+func writeItems[T any](c *fiber.Ctx, items []T, err error, page, limit int, total int64) error {
+	if err != nil {
+		return response.InternalError(c)
+	}
+	return writeCollectionPage(c, items, page, limit, total, len(items))
 }
 
 // writeCollectionPage writes one collection page: the {items,page,limit,row_count}
@@ -260,9 +279,32 @@ func writeCollectionPage(c *fiber.Ctx, items any, page, limit int, total int64, 
 	})
 }
 
+// historyMedia hydrates a history page: the rows' own media, plus (for episode
+// rows) the parent show the contract's history entry carries.
+func historyMedia(db *gorm.DB, rows []database.UserHistory) (map[contractshape.MediaRef]map[string]any, map[int64]int64, error) {
+	media, err := contractshape.MediaObjects(db, historyRefs(rows))
+	if err != nil {
+		return nil, nil, err
+	}
+	episodeShows, shows, err := historyEpisodeShows(db, rows)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(shows) > 0 {
+		showObjects, err := contractshape.MediaObjects(db, shows)
+		if err != nil {
+			return nil, nil, err
+		}
+		for ref, obj := range showObjects {
+			media[ref] = obj
+		}
+	}
+	return media, episodeShows, nil
+}
+
 // historyEpisodeShows maps each episode row's id to its parent show id and
 // returns the show refs that still need hydrating.
-func historyEpisodeShows(db *gorm.DB, rows []database.UserHistory) (map[int64]int64, []contractshape.MediaRef) {
+func historyEpisodeShows(db *gorm.DB, rows []database.UserHistory) (map[int64]int64, []contractshape.MediaRef, error) {
 	var episodeIDs []int64
 	for i := range rows {
 		if rows[i].MediaType != "episode" {
@@ -274,10 +316,13 @@ func historyEpisodeShows(db *gorm.DB, rows []database.UserHistory) (map[int64]in
 		}
 		episodeIDs = append(episodeIDs, id)
 	}
-	episodeShows := contractshape.EpisodeShowIDs(db, episodeIDs)
+	episodeShows, err := contractshape.EpisodeShowIDs(db, episodeIDs)
+	if err != nil {
+		return nil, nil, err
+	}
 	shows := make([]contractshape.MediaRef, 0, len(episodeShows))
 	for _, showID := range episodeShows {
 		shows = append(shows, contractshape.MediaRef{Type: "show", ID: showID})
 	}
-	return episodeShows, shows
+	return episodeShows, shows, nil
 }

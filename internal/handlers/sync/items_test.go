@@ -254,7 +254,10 @@ func TestDanglingMediaRowKeepsTheItemWithoutTheObject(t *testing.T) {
 	if err := db.Where("user_id = ? AND media_id = ?", itemsUser, 999999).Find(&rows).Error; err != nil {
 		t.Fatalf("read rows: %v", err)
 	}
-	items := buildWatchlistItems(db, rows)
+	items, err := buildWatchlistItems(db, rows)
+	if err != nil {
+		t.Fatalf("build items: %v", err)
+	}
 	if len(items) != 1 {
 		t.Fatalf("items = %d, want 1", len(items))
 	}
@@ -263,5 +266,32 @@ func TestDanglingMediaRowKeepsTheItemWithoutTheObject(t *testing.T) {
 	}
 	if items[0]["media_id"] != int64(999999) {
 		t.Errorf("media_id = %v, want 999999", items[0]["media_id"])
+	}
+}
+
+func TestHydrationFailureIsAnErrorNotASilentPage(t *testing.T) {
+	// A page whose media tables are unreachable must not be served as a 200 with
+	// the media objects quietly stripped: a client cannot tell that apart from
+	// media rows that genuinely no longer exist.
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open in-memory sqlite: %v", err)
+	}
+	// The collection table exists; the media tables deliberately do not.
+	if err := db.AutoMigrate(&database.UserWatchlist{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := db.Create(&database.UserWatchlist{
+		UserID: itemsUser, MediaType: "movie", MediaID: 1, Rank: 1, ListedAt: time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create row: %v", err)
+	}
+
+	var rows []database.UserWatchlist
+	if err := db.Find(&rows).Error; err != nil {
+		t.Fatalf("read rows: %v", err)
+	}
+	if _, err := buildWatchlistItems(db, rows); err == nil {
+		t.Fatal("buildWatchlistItems returned a page with a failed hydration; want an error")
 	}
 }

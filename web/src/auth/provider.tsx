@@ -51,14 +51,17 @@ const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL || undefined
  */
 function useInstanceAdmin(
   isSignedIn: boolean,
+  userId: string | null,
   getToken: () => Promise<string | null>
 ): boolean {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    if (!isSignedIn) {
-      setIsAdmin(false)
+    // Reset first: a stale `true` must never survive an account change, and it
+    // must not survive a lookup that fails for the new account either.
+    setIsAdmin(false)
+    if (!isSignedIn || !userId) {
       return
     }
     void (async () => {
@@ -79,7 +82,7 @@ function useInstanceAdmin(
     return () => {
       cancelled = true
     }
-  }, [isSignedIn, getToken])
+  }, [isSignedIn, userId, getToken])
 
   return isAdmin
 }
@@ -91,7 +94,11 @@ function ClerkAuthBridge({
 }: PropsWithChildren<{ config: AuthConfig | null }>) {
   const { isSignedIn, getToken } = useAuth()
   const { user, signOut } = useClerk()
-  const isAdmin = useInstanceAdmin(Boolean(isSignedIn), getToken)
+  const isAdmin = useInstanceAdmin(
+    Boolean(isSignedIn),
+    user?.id ?? null,
+    getToken
+  )
 
   const mappedUser: AuthUser | null = user
     ? {

@@ -31,7 +31,7 @@ type MediaRef struct {
 //
 // A reference whose row no longer exists is absent from the result: the caller
 // omits the dangling item rather than fabricating a placeholder.
-func MediaObjects(db *gorm.DB, refs []MediaRef) map[MediaRef]map[string]any {
+func MediaObjects(db *gorm.DB, refs []MediaRef) (map[MediaRef]map[string]any, error) {
 	out := make(map[MediaRef]map[string]any, len(refs))
 	byType := map[string][]int64{}
 	for _, ref := range refs {
@@ -40,13 +40,25 @@ func MediaObjects(db *gorm.DB, refs []MediaRef) map[MediaRef]map[string]any {
 		}
 	}
 	if len(byType) == 0 {
-		return out
+		return out, nil
 	}
 
-	movies := loadMovieIDs(db, byType["movie"])
-	shows := loadShowIDs(db, byType["show"])
-	seasons := loadSeasonIDs(db, byType["season"])
-	episodes := loadEpisodeIDs(db, byType["episode"])
+	movies, err := loadMovieIDs(db, byType["movie"])
+	if err != nil {
+		return nil, err
+	}
+	shows, err := loadShowIDs(db, byType["show"])
+	if err != nil {
+		return nil, err
+	}
+	seasons, err := loadSeasonIDs(db, byType["season"])
+	if err != nil {
+		return nil, err
+	}
+	episodes, err := loadEpisodeIDs(db, byType["episode"])
+	if err != nil {
+		return nil, err
+	}
 
 	// An episode object carries its season's number, so an episode-only page
 	// still needs one query for the seasons it references.
@@ -54,7 +66,11 @@ func MediaObjects(db *gorm.DB, refs []MediaRef) map[MediaRef]map[string]any {
 	for _, ep := range episodes {
 		episodeSeasons = append(episodeSeasons, ep.SeasonID)
 	}
-	for id, season := range loadSeasonIDs(db, episodeSeasons) {
+	episodeSeasonRows, err := loadSeasonIDs(db, episodeSeasons)
+	if err != nil {
+		return nil, err
+	}
+	for id, season := range episodeSeasonRows {
 		seasons[id] = season
 	}
 
@@ -82,102 +98,107 @@ func MediaObjects(db *gorm.DB, refs []MediaRef) map[MediaRef]map[string]any {
 			}
 		}
 	}
-	return out
+	return out, nil
 }
 
 // MediaObject renders a single media row; ok is false when the row is gone.
-func MediaObject(db *gorm.DB, mediaType string, mediaID int64) (map[string]any, bool) {
+func MediaObject(db *gorm.DB, mediaType string, mediaID int64) (map[string]any, bool, error) {
 	ref := MediaRef{Type: mediaType, ID: mediaID}
-	row, ok := MediaObjects(db, []MediaRef{ref})[ref]
-	return row, ok
+	rows, err := MediaObjects(db, []MediaRef{ref})
+	if err != nil {
+		return nil, false, err
+	}
+	row, ok := rows[ref]
+	return row, ok, nil
 }
 
 // EpisodeShowIDs maps each episode row id to its parent show id, in one query.
 // An episode object does not carry its show, but a contract history entry does,
 // so the caller resolves the parents for a whole page at once.
-func EpisodeShowIDs(db *gorm.DB, episodeIDs []int64) map[int64]int64 {
+func EpisodeShowIDs(db *gorm.DB, episodeIDs []int64) (map[int64]int64, error) {
 	out := make(map[int64]int64, len(episodeIDs))
 	ids := dedupeIDs(episodeIDs)
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	var rows []database.Episode
-	if db.Select("id", "show_id").Where("id IN ?", ids).Find(&rows).Error != nil {
-		return out
+	if err := db.Select("id", "show_id").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
 	}
 	for i := range rows {
 		out[rows[i].ID] = rows[i].ShowID
 	}
-	return out
+	return out, nil
 }
 
-// loadMovieIDs batch-loads movies by id. A query error yields an empty map, and
-// the caller then omits those items — the same behaviour as a missing row.
-func loadMovieIDs(db *gorm.DB, ids []int64) map[int64]database.Movie {
+// loadMovieIDs batch-loads movies by id. A query error is returned, never
+// swallowed: a page that answers 200 with items stripped of their media is a
+// lie a client cannot detect, while an error becomes a 500 it can see.
+func loadMovieIDs(db *gorm.DB, ids []int64) (map[int64]database.Movie, error) {
 	out := make(map[int64]database.Movie, len(ids))
 	ids = dedupeIDs(ids)
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	var rows []database.Movie
-	if db.Where("id IN ?", ids).Find(&rows).Error != nil {
-		return out
+	if err := db.Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
 	}
 	for i := range rows {
 		out[rows[i].ID] = rows[i]
 	}
-	return out
+	return out, nil
 }
 
 // loadShowIDs batch-loads shows by id.
-func loadShowIDs(db *gorm.DB, ids []int64) map[int64]database.Show {
+func loadShowIDs(db *gorm.DB, ids []int64) (map[int64]database.Show, error) {
 	out := make(map[int64]database.Show, len(ids))
 	ids = dedupeIDs(ids)
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	var rows []database.Show
-	if db.Where("id IN ?", ids).Find(&rows).Error != nil {
-		return out
+	if err := db.Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
 	}
 	for i := range rows {
 		out[rows[i].ID] = rows[i]
 	}
-	return out
+	return out, nil
 }
 
 // loadSeasonIDs batch-loads seasons by id.
-func loadSeasonIDs(db *gorm.DB, ids []int64) map[int64]database.Season {
+func loadSeasonIDs(db *gorm.DB, ids []int64) (map[int64]database.Season, error) {
 	out := make(map[int64]database.Season, len(ids))
 	ids = dedupeIDs(ids)
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	var rows []database.Season
-	if db.Where("id IN ?", ids).Find(&rows).Error != nil {
-		return out
+	if err := db.Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
 	}
 	for i := range rows {
 		out[rows[i].ID] = rows[i]
 	}
-	return out
+	return out, nil
 }
 
 // loadEpisodeIDs batch-loads episodes by id.
-func loadEpisodeIDs(db *gorm.DB, ids []int64) map[int64]database.Episode {
+func loadEpisodeIDs(db *gorm.DB, ids []int64) (map[int64]database.Episode, error) {
 	out := make(map[int64]database.Episode, len(ids))
 	ids = dedupeIDs(ids)
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	var rows []database.Episode
-	if db.Where("id IN ?", ids).Find(&rows).Error != nil {
-		return out
+	if err := db.Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
 	}
 	for i := range rows {
 		out[rows[i].ID] = rows[i]
 	}
-	return out
+	return out, nil
 }
 
 // dedupeIDs drops duplicates and the zero id so an IN list stays small and can

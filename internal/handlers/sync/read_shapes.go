@@ -34,27 +34,34 @@ type FavoriteResponse = map[string]any
 // contract reads render the same rows at /users/{id}/history/*.
 func HistoryAction(source string) string { return historyAction(source) }
 
-// BuildHistoryResponse renders a history row with its media object.
-func BuildHistoryResponse(db *gorm.DB, h *database.UserHistory) HistoryResponse {
+// BuildHistoryResponse renders one history row with its media object.
+func BuildHistoryResponse(db *gorm.DB, h *database.UserHistory) (HistoryResponse, error) {
 	return buildHistoryItem(db, h)
 }
 
+// BuildHistoryResponses renders a whole history page with ONE hydration pass.
+// Callers page through rows, so a per-row builder would be one lookup chain per
+// row; this is the shape every list handler should use.
+func BuildHistoryResponses(db *gorm.DB, items []database.UserHistory) ([]HistoryResponse, error) {
+	return buildHistoryItems(db, items)
+}
+
 // BuildCollectionResponses renders collection rows with their media objects.
-func BuildCollectionResponses(db *gorm.DB, items []database.UserCollection) []CollectionResponse {
+func BuildCollectionResponses(db *gorm.DB, items []database.UserCollection) ([]CollectionResponse, error) {
 	return buildCollectionItems(db, items)
 }
 
 // BuildWatchlistResponses renders watchlist rows with their media objects.
-func BuildWatchlistResponses(db *gorm.DB, items []database.UserWatchlist) []WatchlistResponse {
+func BuildWatchlistResponses(db *gorm.DB, items []database.UserWatchlist) ([]WatchlistResponse, error) {
 	return buildWatchlistItems(db, items)
 }
 
 // BuildRatingResponses renders rating rows with their media objects.
-func BuildRatingResponses(db *gorm.DB, items []database.UserRating) []RatingResponse {
+func BuildRatingResponses(db *gorm.DB, items []database.UserRating) ([]RatingResponse, error) {
 	return buildRatingItems(db, items)
 }
 
 // BuildFavoriteResponses renders favorites rows with their media objects.
-func BuildFavoriteResponses(db *gorm.DB, items []database.UserFavorite) []FavoriteResponse {
+func BuildFavoriteResponses(db *gorm.DB, items []database.UserFavorite) ([]FavoriteResponse, error) {
 	return buildFavoriteItems(db, items)
 }

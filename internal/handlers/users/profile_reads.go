@@ -235,9 +235,9 @@ func handleUserHistory(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	items := make([]sync.HistoryResponse, 0, len(rows))
-	for i := range rows {
-		items = append(items, sync.BuildHistoryResponse(db, &rows[i]))
+	items, err := sync.BuildHistoryResponses(db, rows)
+	if err != nil {
+		return response.InternalError(c)
 	}
 
 	response.SetPaginationHeaders(c, page, limit, total, len(items))
@@ -278,9 +278,9 @@ func handleUserHistoryItem(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	items := make([]sync.HistoryResponse, 0, len(rows))
-	for i := range rows {
-		items = append(items, sync.BuildHistoryResponse(db, &rows[i]))
+	items, err := sync.BuildHistoryResponses(db, rows)
+	if err != nil {
+		return response.InternalError(c)
 	}
 
 	return c.JSON(profilePage{Items: items, RowCount: int64(len(items))})
@@ -319,7 +319,10 @@ func handleUserRatings(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	items := sync.BuildRatingResponses(db, rows)
+	items, err := sync.BuildRatingResponses(db, rows)
+	if err != nil {
+		return response.InternalError(c)
+	}
 
 	response.SetPaginationHeaders(c, page, limit, total, len(items))
 	return c.JSON(profilePage{Items: items, Page: page, Limit: limit, RowCount: total})
@@ -379,9 +382,14 @@ func handleUserWatchlist(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	response.SetPaginationHeaders(c, page, limit, total, len(rows))
+	items, err := sync.BuildWatchlistResponses(db, rows)
+	if err != nil {
+		return response.InternalError(c)
+	}
+
+	response.SetPaginationHeaders(c, page, limit, total, len(items))
 	return c.JSON(profilePage{
-		Items:    sync.BuildWatchlistResponses(db, rows),
+		Items:    items,
 		Page:     page,
 		Limit:    limit,
 		RowCount: total,
@@ -422,9 +430,14 @@ func handleUserCollection(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	response.SetPaginationHeaders(c, page, limit, total, len(rows))
+	items, err := sync.BuildCollectionResponses(db, rows)
+	if err != nil {
+		return response.InternalError(c)
+	}
+
+	response.SetPaginationHeaders(c, page, limit, total, len(items))
 	return c.JSON(profilePage{
-		Items:    sync.BuildCollectionResponses(db, rows),
+		Items:    items,
 		Page:     page,
 		Limit:    limit,
 		RowCount: total,
