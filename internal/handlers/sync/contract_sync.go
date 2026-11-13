@@ -90,7 +90,7 @@ func handleContractCollection(c *fiber.Ctx) error {
 
 	out := make([]map[string]any, 0, len(rows))
 	for i := range rows {
-		item, ok := collectionItem(db, &rows[i])
+		item, ok := contractCollectionItem(db, &rows[i])
 		if ok {
 			out = append(out, item)
 		}
@@ -99,7 +99,7 @@ func handleContractCollection(c *fiber.Ctx) error {
 	return c.JSON(out)
 }
 
-func collectionItem(db *gorm.DB, row *database.UserCollection) (map[string]any, bool) {
+func contractCollectionItem(db *gorm.DB, row *database.UserCollection) (map[string]any, bool) {
 	item := map[string]any{
 		"type":         row.MediaType,
 		"collected_at": contractshape.Timestamp(row.CollectedAt),

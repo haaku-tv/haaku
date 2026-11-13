@@ -61,8 +61,11 @@ function ProfilePage() {
     queryKey: ['profile', 'activity'],
     queryFn: async () => {
       if (!api) return null
+      // /v1/users/me/activity answers {data,page,limit,total_count}; read the
+      // envelope rather than the body, or the section never renders.
       const res = await api.GET('/v1/users/me/activity')
-      return res.data as unknown as unknown[] | null
+      const body = res.data as unknown as { data?: unknown[] } | undefined
+      return (body?.data ?? null) as unknown[] | null
     },
     enabled: !!api,
   })
@@ -113,11 +116,19 @@ function ProfilePage() {
   const bannerUrl = (profile as Record<string, unknown>)?.banner_url as
     | string
     | undefined
-  const isPrivate = (profile as Record<string, unknown>)?.private as
+  // /v1/users/me serves `is_private` (the contract's public-profile object
+  // carries both names), so the badge must read is_private with `private` as a
+  // fallback — reading only `private` left a private profile looking public.
+  const profileRecord = profile as Record<string, unknown> | null
+  const isPrivate = (profileRecord?.is_private ?? profileRecord?.private) as
     | boolean
     | undefined
 
-  const statsData = stats as Record<string, Record<string, number>> | null
+  // /v1/users/me/stats is flat: {user_id, plays, minutes, unique_movies,
+  // unique_shows, unique_episodes, ratings_count}. It has no per-type `watched`
+  // block, so reading stats.movies.watched showed 0 plays forever.
+  const statsData = stats as Record<string, number> | null
+  const statValue = (key: string) => String(statsData?.[key] ?? 0)
 
   const isLoading = profileLoading || statsLoading
 
@@ -202,21 +213,19 @@ function ProfilePage() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatCard
                 label="Watched"
-                value={String(
-                  statsData?.movies?.watched ?? statsData?.plays ?? 0
-                )}
+                value={statValue('plays')}
                 icon={Eye}
                 badgeColor="purple"
               />
               <StatCard
                 label="Movies"
-                value={String(statsData?.movies?.watched ?? 0)}
+                value={statValue('unique_movies')}
                 icon={Film}
                 badgeColor="blue"
               />
               <StatCard
                 label="Shows"
-                value={String(statsData?.shows?.watched ?? 0)}
+                value={statValue('unique_shows')}
                 icon={Tv}
                 badgeColor="green"
               />

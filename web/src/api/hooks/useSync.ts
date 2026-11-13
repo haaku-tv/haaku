@@ -1,24 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useApi } from '@/api/client'
+import { parsePage } from '@/api/pagination'
 import type {
   ActivityItem,
   CollectionItem,
-  CollectionResponse,
   FavoriteItem,
-  FavoriteResponse,
   HistoryItem,
-  HistoryResponse,
   Ids,
   Movie,
   PlaybackItem,
   RatingItem,
-  RatingResponse,
   RecommendationItem,
   SyncActionPayload,
   WatchlistItem,
   WatchlistReorderBody,
-  WatchlistResponse,
 } from '@/api/types'
 
 // ============================================================
@@ -76,28 +72,7 @@ export function useWatchlist(params?: {
       const res = await api.GET('/v1/sync/watchlist', {
         params: { query: searchParams as Record<string, never> },
       } as never)
-      const data = res.data as unknown as unknown[] | undefined
-      if (!data || !Array.isArray(data))
-        return {
-          data: [] as WatchlistItem[],
-          page: 1,
-          limit: 20,
-          total: 0,
-          total_pages: 0,
-        }
-
-      const headers = res.response?.headers
-      const total = Number(headers?.get('x-pagination-total') ?? data.length)
-      const page = Number(headers?.get('x-pagination-page') ?? 1)
-      const limit = Number(headers?.get('x-pagination-limit') ?? 20)
-
-      return {
-        data: data as WatchlistItem[],
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      } satisfies WatchlistResponse
+      return parsePage<WatchlistItem>(res)
     },
     enabled: !!api,
   })
@@ -196,28 +171,7 @@ export function useHistory(params?: {
       const res = await api.GET('/v1/sync/history', {
         params: { query: searchParams as Record<string, never> },
       } as never)
-      const data = res.data as unknown as unknown[] | undefined
-      if (!data || !Array.isArray(data))
-        return {
-          data: [] as HistoryItem[],
-          page: 1,
-          limit: 20,
-          total: 0,
-          total_pages: 0,
-        }
-
-      const headers = res.response?.headers
-      const total = Number(headers?.get('x-pagination-total') ?? data.length)
-      const page = Number(headers?.get('x-pagination-page') ?? 1)
-      const limit = Number(headers?.get('x-pagination-limit') ?? 20)
-
-      return {
-        data: data as HistoryItem[],
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      } satisfies HistoryResponse
+      return parsePage<HistoryItem>(res)
     },
     enabled: !!api,
   })
@@ -293,28 +247,7 @@ export function useRatings(params?: {
       const res = await api.GET('/v1/sync/ratings', {
         params: { query: searchParams as Record<string, never> },
       } as never)
-      const data = res.data as unknown as unknown[] | undefined
-      if (!data || !Array.isArray(data))
-        return {
-          data: [] as RatingItem[],
-          page: 1,
-          limit: 20,
-          total: 0,
-          total_pages: 0,
-        }
-
-      const headers = res.response?.headers
-      const total = Number(headers?.get('x-pagination-total') ?? data.length)
-      const page = Number(headers?.get('x-pagination-page') ?? 1)
-      const limit = Number(headers?.get('x-pagination-limit') ?? 20)
-
-      return {
-        data: data as RatingItem[],
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      } satisfies RatingResponse
+      return parsePage<RatingItem>(res)
     },
     enabled: !!api,
   })
@@ -390,28 +323,7 @@ export function useCollection(params?: {
       const res = await api.GET('/v1/sync/collection', {
         params: { query: searchParams as Record<string, never> },
       } as never)
-      const data = res.data as unknown as unknown[] | undefined
-      if (!data || !Array.isArray(data))
-        return {
-          data: [] as CollectionItem[],
-          page: 1,
-          limit: 20,
-          total: 0,
-          total_pages: 0,
-        }
-
-      const headers = res.response?.headers
-      const total = Number(headers?.get('x-pagination-total') ?? data.length)
-      const page = Number(headers?.get('x-pagination-page') ?? 1)
-      const limit = Number(headers?.get('x-pagination-limit') ?? 20)
-
-      return {
-        data: data as CollectionItem[],
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      } satisfies CollectionResponse
+      return parsePage<CollectionItem>(res)
     },
     enabled: !!api,
   })
@@ -489,28 +401,7 @@ export function useFavorites(params?: {
       const res = await api.GET('/v1/sync/favorites', {
         params: { query: searchParams as Record<string, never> },
       } as never)
-      const data = res.data as unknown as unknown[] | undefined
-      if (!data || !Array.isArray(data))
-        return {
-          data: [] as FavoriteItem[],
-          page: 1,
-          limit: 20,
-          total: 0,
-          total_pages: 0,
-        }
-
-      const headers = res.response?.headers
-      const total = Number(headers?.get('x-pagination-total') ?? data.length)
-      const page = Number(headers?.get('x-pagination-page') ?? 1)
-      const limit = Number(headers?.get('x-pagination-limit') ?? 20)
-
-      return {
-        data: data as FavoriteItem[],
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      } satisfies FavoriteResponse
+      return parsePage<FavoriteItem>(res)
     },
     enabled: !!api,
   })

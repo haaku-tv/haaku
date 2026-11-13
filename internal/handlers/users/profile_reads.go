@@ -237,7 +237,7 @@ func handleUserHistory(c *fiber.Ctx) error {
 
 	items := make([]sync.HistoryResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, sync.BuildHistoryResponse(&rows[i]))
+		items = append(items, sync.BuildHistoryResponse(db, &rows[i]))
 	}
 
 	response.SetPaginationHeaders(c, page, limit, total, len(items))
@@ -280,7 +280,7 @@ func handleUserHistoryItem(c *fiber.Ctx) error {
 
 	items := make([]sync.HistoryResponse, 0, len(rows))
 	for i := range rows {
-		items = append(items, sync.BuildHistoryResponse(&rows[i]))
+		items = append(items, sync.BuildHistoryResponse(db, &rows[i]))
 	}
 
 	return c.JSON(profilePage{Items: items, RowCount: int64(len(items))})
@@ -319,7 +319,7 @@ func handleUserRatings(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	items := sync.BuildRatingResponses(rows)
+	items := sync.BuildRatingResponses(db, rows)
 
 	response.SetPaginationHeaders(c, page, limit, total, len(items))
 	return c.JSON(profilePage{Items: items, Page: page, Limit: limit, RowCount: total})
@@ -381,7 +381,7 @@ func handleUserWatchlist(c *fiber.Ctx) error {
 
 	response.SetPaginationHeaders(c, page, limit, total, len(rows))
 	return c.JSON(profilePage{
-		Items:    sync.BuildWatchlistResponses(rows),
+		Items:    sync.BuildWatchlistResponses(db, rows),
 		Page:     page,
 		Limit:    limit,
 		RowCount: total,
@@ -424,7 +424,7 @@ func handleUserCollection(c *fiber.Ctx) error {
 
 	response.SetPaginationHeaders(c, page, limit, total, len(rows))
 	return c.JSON(profilePage{
-		Items:    sync.BuildCollectionResponses(rows),
+		Items:    sync.BuildCollectionResponses(db, rows),
 		Page:     page,
 		Limit:    limit,
 		RowCount: total,
