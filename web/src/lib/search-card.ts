@@ -1,5 +1,6 @@
 import type { Ids, SearchResult } from '@/api/types'
 import { episodeStill, firstImage } from '@/lib/images'
+import { mediaLink } from '@/lib/media-url'
 
 /**
  * cardOf reduces a search result to what a card needs: which media type it is,
@@ -30,6 +31,7 @@ export function cardOf(result: SearchResult): CardModel | null {
       // no local id but does carry a slug, and treating the slug as an id
       // navigated to /movies/breaking-bad, a row that was never ingested.
       const localId = m.ids.trakt || m.ids.id || 0
+      const inCatalog = m.in_catalog !== false && localId > 0
       return {
         mediaType: 'movie',
         title: String(m.title ?? ''),
@@ -39,15 +41,15 @@ export function cardOf(result: SearchResult): CardModel | null {
         aspect: '2:3',
         ids: m.ids,
         tmdbId: m.ids.tmdb,
-        inCatalog: m.in_catalog !== false && localId > 0,
-        navigateTo:
-          localId > 0 ? { to: '/movies/$id', id: String(localId) } : undefined,
+        inCatalog,
+        navigateTo: inCatalog ? mediaLink('movie', m.ids) : undefined,
       }
     }
     case 'show': {
       const s = result.show
       if (!s) return null
       const localId = s.ids.trakt || s.ids.id || 0
+      const inCatalog = s.in_catalog !== false && localId > 0
       return {
         mediaType: 'show',
         title: String(s.title ?? ''),
@@ -57,9 +59,8 @@ export function cardOf(result: SearchResult): CardModel | null {
         aspect: '2:3',
         ids: s.ids,
         tmdbId: s.ids.tmdb,
-        inCatalog: s.in_catalog !== false && localId > 0,
-        navigateTo:
-          localId > 0 ? { to: '/shows/$id', id: String(localId) } : undefined,
+        inCatalog,
+        navigateTo: inCatalog ? mediaLink('show', s.ids) : undefined,
       }
     }
     case 'episode': {

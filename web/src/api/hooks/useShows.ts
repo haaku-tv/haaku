@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/fetch'
+import { getMedia } from '@/api/media'
 import type {
   Alias,
   CommentResponse,
@@ -49,7 +50,7 @@ export const showKeys = {
 export function useShow(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.detail(id ?? ''),
-    queryFn: () => api.get<Show>(`/v1/shows/${id}`),
+    queryFn: () => getMedia<Show>('shows', id),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -58,7 +59,7 @@ export function useShow(id: string | number | undefined) {
 export function useShowPeople(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.people(id ?? ''),
-    queryFn: () => api.get<CreditResponse>(`/v1/shows/${id}/people`),
+    queryFn: () => getMedia<CreditResponse>('shows', id, '/people'),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -67,7 +68,7 @@ export function useShowPeople(id: string | number | undefined) {
 export function useShowStats(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.stats(id ?? ''),
-    queryFn: () => api.get<MediaStats>(`/v1/shows/${id}/stats`),
+    queryFn: () => getMedia<MediaStats>('shows', id, '/stats'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -76,7 +77,7 @@ export function useShowStats(id: string | number | undefined) {
 export function useShowRatings(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.ratings(id ?? ''),
-    queryFn: () => api.get<RatingDistribution>(`/v1/shows/${id}/ratings`),
+    queryFn: () => getMedia<RatingDistribution>('shows', id, '/ratings'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -85,7 +86,7 @@ export function useShowRatings(id: string | number | undefined) {
 export function useShowWatchProviders(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.watch(id ?? ''),
-    queryFn: () => api.get<WatchProviderCountry[]>(`/v1/shows/${id}/watch`),
+    queryFn: () => getMedia<WatchProviderCountry[]>('shows', id, '/watch'),
     enabled: !!id,
     staleTime: 10 * 60_000,
   })
@@ -94,7 +95,7 @@ export function useShowWatchProviders(id: string | number | undefined) {
 export function useShowLists(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.lists(id ?? ''),
-    queryFn: () => api.get<TraktList[]>(`/v1/shows/${id}/lists`),
+    queryFn: () => getMedia<TraktList[]>('shows', id, '/lists'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -103,7 +104,7 @@ export function useShowLists(id: string | number | undefined) {
 export function useShowWatching(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.watching(id ?? ''),
-    queryFn: () => api.get<unknown[]>(`/v1/shows/${id}/watching`),
+    queryFn: () => getMedia<unknown[]>('shows', id, '/watching'),
     enabled: !!id,
     staleTime: 30_000,
   })
@@ -112,7 +113,7 @@ export function useShowWatching(id: string | number | undefined) {
 export function useShowAliases(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.aliases(id ?? ''),
-    queryFn: () => api.get<Alias[]>(`/v1/shows/${id}/aliases`),
+    queryFn: () => getMedia<Alias[]>('shows', id, '/aliases'),
     enabled: !!id,
     staleTime: 10 * 60_000,
   })
@@ -121,7 +122,7 @@ export function useShowAliases(id: string | number | undefined) {
 export function useShowRecommendations(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.recommendations(id ?? ''),
-    queryFn: () => api.get<Show[]>(`/v1/shows/recommendations/${id}`),
+    queryFn: () => getMedia<Show[]>('shows', id, '', 'recommendations/'),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -130,7 +131,7 @@ export function useShowRecommendations(id: string | number | undefined) {
 export function useShowComments(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.comments(id ?? ''),
-    queryFn: () => api.get<CommentResponse>(`/v1/shows/${id}/comments`),
+    queryFn: () => getMedia<CommentResponse>('shows', id, '/comments'),
     enabled: !!id,
     staleTime: 60_000,
   })
@@ -139,7 +140,7 @@ export function useShowComments(id: string | number | undefined) {
 export function useShowSeasons(id: string | number | undefined) {
   return useQuery({
     queryKey: showKeys.seasons(id ?? ''),
-    queryFn: () => api.get<Season[]>(`/v1/shows/${id}/seasons`),
+    queryFn: () => getMedia<Season[]>('shows', id, '/seasons'),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -151,7 +152,7 @@ export function useShowSeason(
 ) {
   return useQuery({
     queryKey: showKeys.seasonDetail(id ?? '', season ?? 0),
-    queryFn: () => api.get<Season>(`/v1/shows/${id}/seasons/${season}`),
+    queryFn: () => getMedia<Season>('shows', id, `/seasons/${season}`),
     enabled: !!id && season !== undefined,
     staleTime: 5 * 60_000,
   })
@@ -164,7 +165,7 @@ export function useShowSeasonEpisodes(
   return useQuery({
     queryKey: showKeys.seasonEpisodes(id ?? '', season ?? 0),
     queryFn: () =>
-      api.get<Episode[]>(`/v1/shows/${id}/seasons/${season}/episodes`),
+      getMedia<Episode[]>('shows', id, `/seasons/${season}/episodes`),
     enabled: !!id && season !== undefined,
     staleTime: 5 * 60_000,
   })
@@ -178,7 +179,7 @@ export function useShowEpisode(
   return useQuery({
     queryKey: showKeys.episodeDetail(id ?? '', season ?? 0, episode ?? 0),
     queryFn: () =>
-      api.get<Episode>(`/v1/shows/${id}/seasons/${season}/episodes/${episode}`),
+      getMedia<Episode>('shows', id, `/seasons/${season}/episodes/${episode}`),
     enabled: !!id && season !== undefined && episode !== undefined,
     staleTime: 5 * 60_000,
   })

@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/fetch'
+import { getMedia } from '@/api/media'
 import type {
   Alias,
   CommentResponse,
@@ -42,7 +43,7 @@ export const movieKeys = {
 export function useMovie(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.detail(id ?? ''),
-    queryFn: () => api.get<Movie>(`/v1/movies/${id}`),
+    queryFn: () => getMedia<Movie>('movies', id),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -51,7 +52,7 @@ export function useMovie(id: string | number | undefined) {
 export function useMoviePeople(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.people(id ?? ''),
-    queryFn: () => api.get<CreditResponse>(`/v1/movies/${id}/people`),
+    queryFn: () => getMedia<CreditResponse>('movies', id, '/people'),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -60,7 +61,7 @@ export function useMoviePeople(id: string | number | undefined) {
 export function useMovieStats(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.stats(id ?? ''),
-    queryFn: () => api.get<MediaStats>(`/v1/movies/${id}/stats`),
+    queryFn: () => getMedia<MediaStats>('movies', id, '/stats'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -69,7 +70,7 @@ export function useMovieStats(id: string | number | undefined) {
 export function useMovieRatings(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.ratings(id ?? ''),
-    queryFn: () => api.get<RatingDistribution>(`/v1/movies/${id}/ratings`),
+    queryFn: () => getMedia<RatingDistribution>('movies', id, '/ratings'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -78,7 +79,7 @@ export function useMovieRatings(id: string | number | undefined) {
 export function useMovieWatchProviders(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.watch(id ?? ''),
-    queryFn: () => api.get<WatchProviderCountry[]>(`/v1/movies/${id}/watch`),
+    queryFn: () => getMedia<WatchProviderCountry[]>('movies', id, '/watch'),
     enabled: !!id,
     staleTime: 10 * 60_000,
   })
@@ -87,7 +88,7 @@ export function useMovieWatchProviders(id: string | number | undefined) {
 export function useMovieLists(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.lists(id ?? ''),
-    queryFn: () => api.get<TraktList[]>(`/v1/movies/${id}/lists`),
+    queryFn: () => getMedia<TraktList[]>('movies', id, '/lists'),
     enabled: !!id,
     staleTime: 2 * 60_000,
   })
@@ -96,7 +97,7 @@ export function useMovieLists(id: string | number | undefined) {
 export function useMovieWatching(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.watching(id ?? ''),
-    queryFn: () => api.get<unknown[]>(`/v1/movies/${id}/watching`),
+    queryFn: () => getMedia<unknown[]>('movies', id, '/watching'),
     enabled: !!id,
     staleTime: 30_000,
   })
@@ -105,7 +106,7 @@ export function useMovieWatching(id: string | number | undefined) {
 export function useMovieAliases(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.aliases(id ?? ''),
-    queryFn: () => api.get<Alias[]>(`/v1/movies/${id}/aliases`),
+    queryFn: () => getMedia<Alias[]>('movies', id, '/aliases'),
     enabled: !!id,
     staleTime: 10 * 60_000,
   })
@@ -114,7 +115,7 @@ export function useMovieAliases(id: string | number | undefined) {
 export function useMovieRecommendations(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.recommendations(id ?? ''),
-    queryFn: () => api.get<Movie[]>(`/v1/movies/recommendations/${id}`),
+    queryFn: () => getMedia<Movie[]>('movies', id, '', 'recommendations/'),
     enabled: !!id,
     staleTime: 5 * 60_000,
   })
@@ -123,7 +124,7 @@ export function useMovieRecommendations(id: string | number | undefined) {
 export function useMovieComments(id: string | number | undefined) {
   return useQuery({
     queryKey: movieKeys.comments(id ?? ''),
-    queryFn: () => api.get<CommentResponse>(`/v1/movies/${id}/comments`),
+    queryFn: () => getMedia<CommentResponse>('movies', id, '/comments'),
     enabled: !!id,
     staleTime: 60_000,
   })

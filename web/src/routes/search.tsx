@@ -19,6 +19,7 @@ import {
   ShimmerText,
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
+import { mediaLink } from '@/lib/media-url'
 import { cardOf } from '@/lib/search-card'
 
 const searchSchema = z.object({
@@ -232,10 +233,11 @@ function SearchResultCard({ result }: { result: SearchResult }) {
   const [busy, setBusy] = useState(false)
   const card = useMemo(() => cardOf(result), [result])
 
-  // ensureLocalIds returns ids that address a local row, ingesting the title
-  // first when the result came from a live provider search and is not in the
+  // ensureLocalIds returns the ids of the row this result IS, ingesting the
+  // title first when it came from a live provider search and is not in the
   // catalogue yet. A live hit carries a TMDB id, which is the identity the
-  // resolve endpoint keys on.
+  // resolve endpoint keys on; the ingestion also writes `ids.trakt`, which the
+  // watchlist payload needs.
   const ensureLocalIds = useCallback(async (): Promise<Ids | null> => {
     if (!card) return null
     if (card.ids.trakt > 0) return card.ids
@@ -266,10 +268,17 @@ function SearchResultCard({ result }: { result: SearchResult }) {
         toast.error('This title has no TMDB id to open')
         return
       }
-      navigate({
-        to: card.mediaType === 'movie' ? '/movies/$id' : '/shows/$id',
-        params: { id: String(local.trakt || local.slug) },
-      })
+      // The URL carries the TMDB id, so the page addresses the title the same
+      // way for every install and keeps doing so after a catalogue rebuild.
+      const link = mediaLink(
+        card.mediaType === 'movie' ? 'movie' : 'show',
+        local
+      )
+      if (!link) {
+        toast.error('This title has no TMDB id to open')
+        return
+      }
+      navigate({ to: link.to, params: { id: link.id } })
     } catch {
       toast.error('Could not load this title')
     } finally {

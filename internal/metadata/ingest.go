@@ -27,6 +27,20 @@ import (
 // only has the show's season SUMMARY may hold neither, and db.Save writes every
 // column — so an existing row's artwork and air date are carried forward rather
 // than blanked when the incoming value is empty.
+//
+// Insert is a lookup-then-create, and a create that loses the race is recovered
+// rather than reported: two resolves of the same title run concurrently in
+// practice (a client fires /v1/media/resolve while another request is ingesting
+// the same show), both see no season, both INSERT, and the unique index rejects
+// one. The loser re-reads and adopts the winner's row, because the caller needs
+// a season id to hang its episodes on — previously it answered the client 500
+// with the index's duplicate-key error instead.
+//
+// A conflict target would be cheaper (one statement, `ON CONFLICT DO NOTHING`),
+// but naming (show_id, season_number) makes the statement depend on a unique
+// index the sqlite handler fixtures do not build: they AutoMigrate the MODEL,
+// and that constraint lives only in the SQL migration. The recovery below needs
+// no such index and behaves identically on PostgreSQL and sqlite.
 func IngestSeason(db *gorm.DB, showID int64, tmdbShowID int, s tmdb.SeasonSummary) (*database.Season, error) {
 	now := time.Now()
 	images := map[string]any{}
@@ -47,17 +61,26 @@ func IngestSeason(db *gorm.DB, showID int64, tmdbShowID int, s tmdb.SeasonSummar
 		record.AiredAt = parseDate(s.AirDate)
 	}
 
+	seasonWhere := func(db *gorm.DB) *gorm.DB {
+		return db.Where("show_id = ? AND season_number = ?", showID, s.SeasonNumber)
+	}
+
 	var existing database.Season
-	result := db.Where("show_id = ? AND season_number = ?", showID, s.SeasonNumber).First(&existing)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			if err := db.Create(&record).Error; err != nil {
-				return nil, fmt.Errorf("insert season %d for show %d: %w", s.SeasonNumber, showID, err)
+	lookup := seasonWhere(db).First(&existing)
+	switch {
+	case errors.Is(lookup.Error, gorm.ErrRecordNotFound):
+		if createErr := db.Create(&record).Error; createErr != nil {
+			// Someone else inserted this season between the read and the write.
+			// Their row is the answer; re-read it instead of failing the request.
+			if rereadErr := seasonWhere(db).First(&existing).Error; rereadErr != nil {
+				return nil, fmt.Errorf("insert season %d for show %d: %w", s.SeasonNumber, showID, createErr)
 			}
+		} else {
 			slog.Debug("[ingest] created season", "show_id", showID, "season", s.SeasonNumber)
 			return &record, nil
 		}
-		return nil, fmt.Errorf("lookup season show=%d season=%d: %w", showID, s.SeasonNumber, result.Error)
+	case lookup.Error != nil:
+		return nil, fmt.Errorf("lookup season show=%d season=%d: %w", showID, s.SeasonNumber, lookup.Error)
 	}
 
 	if len(images) == 0 {

@@ -140,8 +140,17 @@ func resolveBySlug(c *fiber.Ctx, slug, want string) (string, int64, error) {
 	return resolveExternalRow(c, "slug", slug, want)
 }
 
-// resolveExternalRow resolves an external_ids row and verifies the media row it
-// points at exists.
+// resolveExternalRow resolves an external id (tmdb, tvdb, imdb) or a slug to the
+// row that carries it.
+//
+// The id can live in TWO places and both are authoritative in practice: the
+// external_ids lookup table, and the media row's own column (tmdb_id, tvdb_id,
+// imdb_id, slug). Rows ingested by an older build — and every row the TMDB
+// backfill wrote — carry the id only on the row, with no external_ids entry, so
+// reading the table alone answers 404 for a title we actually hold. That is the
+// same two-source rule database.ResolveIDRefs already applies to body-carried
+// ids; the route form was the one still reading a single source, which is why
+// ?id_type=tmdb could not address a title the catalogue held only by column.
 //
 // want scopes the lookup to one media type, which matters because an external
 // id is not unique to a type either: the same TMDB id can sit on both a movie
@@ -154,43 +163,129 @@ func resolveExternalRow(c *fiber.Ctx, source, externalID, want string) (string, 
 		return "", 0, fiber.NewError(fiber.StatusInternalServerError, "database unavailable")
 	}
 
-	query := db.Where("source = ? AND external_id = ?", source, externalID)
 	if want != "" {
-		query = query.Where("media_type = ?", want)
-	}
-
-	var ext database.ExternalID
-	if err := query.First(&ext).Error; err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
+		id, found, err := lookupExternal(db, source, externalID, want)
+		if err != nil {
 			return "", 0, fiber.NewError(fiber.StatusInternalServerError, "database query error")
 		}
-		if want != "" {
-			// The id may belong to another media type: that is a wrong-type
-			// answer, not a missing one.
-			var other database.ExternalID
-			if otherErr := db.Where("source = ? AND external_id = ?", source, externalID).
-				First(&other).Error; otherErr == nil {
+		if found {
+			return want, id, nil
+		}
+		// The id may belong to another media type: that is a wrong-type answer,
+		// not a missing one.
+		for _, other := range otherMediaTypes(want) {
+			if _, ok, otherErr := lookupExternal(db, source, externalID, other); otherErr == nil && ok {
 				return notFound(c, "not a "+want)
 			}
 		}
 		return notFound(c, "media not found")
 	}
 
-	// The row the id points at must actually exist: a stale external_ids row
-	// must not resolve to a phantom.
-	mediaType := ext.MediaType
-	if want != "" {
-		mediaType = want
+	// Type-agnostic: movie → show → person, the precedence findMediaTypeByID
+	// has always used.
+	for _, mediaType := range mediaTypeOrder {
+		id, found, err := lookupExternal(db, source, externalID, mediaType)
+		if err != nil {
+			return "", 0, fiber.NewError(fiber.StatusInternalServerError, "database query error")
+		}
+		if found {
+			return mediaType, id, nil
+		}
 	}
-	found, verr := mediaRowExists(mediaType, ext.MediaID)
-	if verr != nil {
-		return "", 0, verr
+	return notFound(c, "media not found")
+}
+
+// mediaTypeOrder is the precedence a type-agnostic lookup walks.
+var mediaTypeOrder = []string{"movie", "show", "person"}
+
+// otherMediaTypes returns every media type except want, in the same order.
+func otherMediaTypes(want string) []string {
+	rest := make([]string, 0, len(mediaTypeOrder))
+	for _, mediaType := range mediaTypeOrder {
+		if mediaType != want {
+			rest = append(rest, mediaType)
+		}
 	}
-	if !found {
-		return notFound(c, "media not found")
+	return rest
+}
+
+// externalColumns names the row column each external source is stored in, per
+// media type. A type with no column for a source (people hold no tvdb id) is
+// absent, so the column read simply finds nothing for it.
+var externalColumns = map[string]map[string]string{
+	"movie":  {"tmdb": "tmdb_id", "tvdb": "tvdb_id", "imdb": "imdb_id", "slug": "slug"},
+	"show":   {"tmdb": "tmdb_id", "tvdb": "tvdb_id", "imdb": "imdb_id", "slug": "slug"},
+	"person": {"tmdb": "tmdb_id", "imdb": "imdb_id"},
+}
+
+// lookupExternal finds the row of ONE media type that carries this external id,
+// reading the external_ids table first (it is indexed for exactly this) and the
+// media row's own column second. A stale external_ids row — one pointing at a
+// row that no longer exists — falls through to the column read instead of
+// resolving to a phantom.
+func lookupExternal(db *gorm.DB, source, externalID, mediaType string) (int64, bool, error) {
+	// An empty id names nothing. Without this, an empty imdb id or slug queries
+	// the column with '' and matches whichever row was ingested with none.
+	if externalID == "" {
+		return 0, false, nil
 	}
 
-	return mediaType, ext.MediaID, nil
+	var ext database.ExternalID
+	err := db.Where("source = ? AND external_id = ? AND media_type = ?", source, externalID, mediaType).
+		First(&ext).Error
+	switch {
+	case err == nil:
+		exists, verr := mediaRowExists(mediaType, ext.MediaID)
+		if verr != nil {
+			return 0, false, verr
+		}
+		if exists {
+			return ext.MediaID, true, nil
+		}
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		// fall through to the column read
+	default:
+		return 0, false, err
+	}
+
+	column, ok := externalColumns[mediaType][source]
+	if !ok {
+		return 0, false, nil
+	}
+
+	value := any(externalID)
+	if column != "imdb_id" && column != "slug" {
+		// A numeric column cannot match a non-numeric id: that is a miss, not a
+		// query failure. A client sending ?id_type=tmdb&id=tt0903747 is asking
+		// for nothing we can serve, and saying "not found" is the honest answer.
+		if !isNumeric(externalID) {
+			return 0, false, nil
+		}
+		numeric, perr := strconv.ParseInt(externalID, 10, 64)
+		if perr != nil {
+			// No row can hold this id: it does not fit in the column's int64, so
+			// "not found" is the answer. Reporting the parse failure instead
+			// surfaced as `500 database query error` for a request no query
+			// failed on. Syntax was already ruled out by isNumeric above.
+			return 0, false, nil //nolint:nilerr // an out-of-range id is a miss, not a failure
+		}
+		// 0 is what an id we do not hold is STORED as: `tmdb_id = 0` and
+		// `tvdb_id = 0` are the rows that have no id at all, so a request for
+		// id 0 would answer with an unrelated title instead of 404.
+		if numeric <= 0 {
+			return 0, false, nil
+		}
+		value = numeric
+	}
+
+	var row struct{ ID int64 }
+	if err := db.Model(mediaTypeModels[mediaType]()).Select("id").Where(column+" = ?", value).Limit(1).Scan(&row).Error; err != nil {
+		return 0, false, err
+	}
+	if row.ID == 0 {
+		return 0, false, nil
+	}
+	return row.ID, true, nil
 }
 
 // mediaTypeModels maps a media type to the table it lives in.

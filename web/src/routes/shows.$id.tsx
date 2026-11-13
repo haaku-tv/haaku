@@ -51,6 +51,7 @@ import {
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
 import { episodeStill, firstImage } from '@/lib/images'
+import { mediaLink } from '@/lib/media-url'
 import { cn, formatDate, formatRuntime } from '@/lib/utils'
 
 export const Route = createFileRoute('/shows/$id')({
@@ -445,12 +446,10 @@ function ShowDetailPage() {
                 rating={s.rating ? (s.rating / 2).toFixed(1) : undefined}
                 type="series"
                 aspect="2:3"
-                onClick={() =>
-                  navigate({
-                    to: '/shows/$id',
-                    params: { id: String(s.ids?.trakt ?? s.ids?.slug) },
-                  })
-                }
+                onClick={() => {
+                  const link = mediaLink('show', s.ids)
+                  if (link) navigate({ to: link.to, params: { id: link.id } })
+                }}
               />
             ))}
           </Rail>
