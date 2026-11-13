@@ -31,10 +31,15 @@ var validExactTypes = map[string]bool{
 }
 
 // parseSearchParams extracts and validates common search query parameters.
+//
+// A query is not required when a genre is given: choosing a genre with the
+// search box empty is a browse ("Drama movies"), and the catalogue can answer
+// it from the rows it holds.
 func parseSearchParams(c *fiber.Ctx) (database.SearchParams, error) {
 	query := strings.TrimSpace(c.Query("query"))
-	if query == "" {
-		return database.SearchParams{}, fiber.NewError(fiber.StatusBadRequest, "query parameter is required")
+	genres := parseCSV(c.Query("genre"))
+	if query == "" && len(genres) == 0 {
+		return database.SearchParams{}, fiber.NewError(fiber.StatusBadRequest, "query or genre parameter is required")
 	}
 
 	typeStr := c.Query("type", "movie,show")
@@ -65,6 +70,7 @@ func parseSearchParams(c *fiber.Ctx) (database.SearchParams, error) {
 		Page:   page,
 		Limit:  limit,
 		Fields: fields,
+		Genres: genres,
 	}, nil
 }
 

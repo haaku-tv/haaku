@@ -38,6 +38,8 @@ export interface SearchParams {
   type?: SearchType
   page?: number
   limit?: number
+  /** genre filters on the titles' own genres; a genre with no q is a browse. */
+  genre?: string
   genres?: string
   years?: string
 }
@@ -96,7 +98,7 @@ export function useSearch(params: SearchParams | null) {
   return useQuery({
     queryKey: searchKeys.search(params ?? { q: '' }),
     queryFn: async () => {
-      if (!params?.q)
+      if (!params?.q && !params?.genre)
         return {
           data: [],
           page: 1,
@@ -107,6 +109,7 @@ export function useSearch(params: SearchParams | null) {
       const result = await api.get<SearchResult[]>('/v1/search', {
         query: params.q,
         type: params.type,
+        genre: params.genre,
         page: params.page ?? 1,
         limit: params.limit ?? 20,
       })
@@ -127,7 +130,7 @@ export function useSearch(params: SearchParams | null) {
         data: (wrapped.data ?? []).map(normalizeSearchResult),
       } as SearchResponse
     },
-    enabled: !!params?.q && params.q.length > 0,
+    enabled: Boolean(params?.q) || Boolean(params?.genre),
     staleTime: 30_000,
   })
 }
