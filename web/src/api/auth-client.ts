@@ -4,11 +4,10 @@
  */
 
 import { ApiError, api } from '@/api/fetch'
+import { apiURL } from '@/api/url'
 import { useAuth } from '@/auth/context'
 
 export { ApiError }
-
-const BASE_URL = import.meta.env.VITE_API_URL || '/'
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
@@ -22,17 +21,7 @@ async function authRequest<T>(
 ): Promise<T> {
   const { params, body, headers: extraHeaders, ...init } = options
 
-  let url = `${BASE_URL}${path}`
-  if (params) {
-    const searchParams = new URLSearchParams()
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== '') {
-        searchParams.set(key, String(value))
-      }
-    }
-    const qs = searchParams.toString()
-    if (qs) url += `?${qs}`
-  }
+  const url = apiURL(path, params)
 
   const token = await getToken()
   const headers: Record<string, string> = {

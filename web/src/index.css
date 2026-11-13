@@ -172,6 +172,26 @@
     text-shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
   }
 
+  /* Metadata pill for a media page: year, certification, runtime, counts and
+     genres all read as one family so a hero's fact row and a section's badges
+     cannot drift apart. */
+  .meta-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--sf-radius-full);
+    border: 1px solid var(--sf-line);
+    background: var(--sf-panel);
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sf-ink-muted);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
   .glass {
     background: var(--sf-panel);
     border: 1px solid var(--sf-line);

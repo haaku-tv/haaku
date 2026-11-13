@@ -3,6 +3,7 @@ package media
 import (
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"github.com/haaku-tv/haaku/internal/contractshape"
 	"github.com/haaku-tv/haaku/internal/database"
@@ -14,12 +15,23 @@ import (
 // --- Response types for media API ---
 
 // IDs is the standard ID object returned with every media response.
+//
+// `trakt` is the contract's required integer id and carries THIS instance's row
+// id. Every row here is addressable by it, the write surfaces already accept
+// `ids.trakt` as the pointer (a comment target, a list item), and a client that
+// only knows the contract shape can therefore open a title without knowing the
+// shorter `id` key — which stays, holding the same value, because older
+// responses and the web client's own types use it.
+//
+// `slug` is required by the contract's ids object, so it is emitted even when
+// the row has none; an empty string is the contract's own "no slug".
 type IDs struct {
-	ID   int64  `json:"id"`
-	Slug string `json:"slug,omitempty"`
-	TMDB int    `json:"tmdb,omitempty"`
-	IMDB string `json:"imdb,omitempty"`
-	TVDB string `json:"tvdb,omitempty"`
+	ID    int64  `json:"id"`
+	Trakt int64  `json:"trakt"`
+	Slug  string `json:"slug"`
+	TMDB  int    `json:"tmdb,omitempty"`
+	IMDB  string `json:"imdb,omitempty"`
+	TVDB  string `json:"tvdb,omitempty"`
 }
 
 // RatingSummary is the community rating summary.
@@ -30,12 +42,28 @@ type RatingSummary struct {
 }
 
 // MovieResponse is the API response shape for a movie.
+//
+// The fields above `// Full extended fields` are the ones a card needs; the
+// rest are the contract's movie object. The detail route serves the full set
+// without a query parameter, because a page that has to ask twice for its own
+// header renders half of it on the first paint.
 type MovieResponse struct {
 	IDs           IDs            `json:"ids"`
 	Title         string         `json:"title"`
 	Year          int            `json:"year"`
 	Images        map[string]any `json:"images"`
 	RatingSummary *RatingSummary `json:"rating_summary,omitempty"`
+
+	// Always served: the row holds them and the page reads them.
+	Released              string   `json:"released,omitempty"`
+	OriginalTitle         string   `json:"original_title,omitempty"`
+	Rating                float64  `json:"rating"`
+	Votes                 int64    `json:"votes"`
+	CommentCount          int64    `json:"comment_count"`
+	Trailer               string   `json:"trailer,omitempty"`
+	Homepage              string   `json:"homepage,omitempty"`
+	Country               string   `json:"country,omitempty"`
+	AvailableTranslations []string `json:"available_translations"`
 
 	// Full extended fields
 	Overview      string   `json:"overview,omitempty"`
@@ -46,6 +74,7 @@ type MovieResponse struct {
 	Language      string   `json:"language,omitempty"`
 	TrailerURL    string   `json:"trailer_url,omitempty"`
 	Status        string   `json:"status,omitempty"`
+	UpdatedAt     string   `json:"updated_at,omitempty"`
 
 	// Metadata extended
 	Metadata map[string]any `json:"metadata,omitempty"`
@@ -59,8 +88,19 @@ type ShowResponse struct {
 	Images        map[string]any `json:"images"`
 	RatingSummary *RatingSummary `json:"rating_summary,omitempty"`
 
+	// Always served (see MovieResponse).
+	Rating                float64  `json:"rating"`
+	Votes                 int64    `json:"votes"`
+	CommentCount          int64    `json:"comment_count"`
+	Trailer               string   `json:"trailer,omitempty"`
+	Homepage              string   `json:"homepage,omitempty"`
+	Country               string   `json:"country,omitempty"`
+	AiredEpisodes         int      `json:"aired_episodes,omitempty"`
+	AvailableTranslations []string `json:"available_translations"`
+
 	// Full extended fields
 	Overview      string   `json:"overview,omitempty"`
+	Tagline       string   `json:"tagline,omitempty"`
 	Runtime       int      `json:"runtime,omitempty"`
 	Genres        []string `json:"genres,omitempty"`
 	Certification string   `json:"certification,omitempty"`
@@ -71,6 +111,7 @@ type ShowResponse struct {
 	SeasonCount   int      `json:"season_count,omitempty"`
 	FirstAired    string   `json:"first_aired,omitempty"`
 	LastAired     string   `json:"last_aired,omitempty"`
+	UpdatedAt     string   `json:"updated_at,omitempty"`
 
 	// Metadata extended
 	Metadata map[string]any `json:"metadata,omitempty"`
@@ -79,30 +120,50 @@ type ShowResponse struct {
 	Seasons []SeasonResponse `json:"seasons"`
 }
 
-// SeasonResponse is the API response shape for a season.
+// SeasonResponse is the API response shape for a season. `number` and `ids`
+// are the contract's required keys; `season_number` is kept beside `number`
+// because the season route's path segment and the row's own column use it.
 type SeasonResponse struct {
 	IDs           IDs            `json:"ids"`
+	Number        int            `json:"number"`
 	ShowID        int64          `json:"show_id"`
 	SeasonNumber  int            `json:"season_number"`
 	EpisodeCount  int            `json:"episode_count"`
+	AiredEpisodes int            `json:"aired_episodes,omitempty"`
+	Title         string         `json:"title,omitempty"`
+	Overview      string         `json:"overview,omitempty"`
+	FirstAired    string         `json:"first_aired,omitempty"`
+	Rating        float64        `json:"rating"`
+	Votes         int64          `json:"votes"`
 	Images        map[string]any `json:"images"`
 	RatingSummary *RatingSummary `json:"rating_summary,omitempty"`
 	AiredAt       string         `json:"aired_at,omitempty"`
+	UpdatedAt     string         `json:"updated_at,omitempty"`
 }
 
-// EpisodeResponse is the API response shape for an episode.
+// EpisodeResponse is the API response shape for an episode. `season`, `number`
+// and `ids` are the contract's required keys; the flat `episode_number` and the
+// row pointers are kept for the internal payloads that join on them.
 type EpisodeResponse struct {
 	IDs            IDs            `json:"ids"`
+	Season         int            `json:"season"`
+	Number         int            `json:"number"`
+	NumberAbs      *int           `json:"number_abs,omitempty"`
 	SeasonID       int64          `json:"season_id"`
 	ShowID         int64          `json:"show_id"`
 	EpisodeNumber  int            `json:"episode_number"`
 	Title          string         `json:"title"`
 	Overview       string         `json:"overview,omitempty"`
 	Runtime        int            `json:"runtime,omitempty"`
+	Rating         float64        `json:"rating"`
+	Votes          int64          `json:"votes"`
+	CommentCount   int64          `json:"comment_count"`
 	Images         map[string]any `json:"images"`
 	RatingSummary  *RatingSummary `json:"rating_summary,omitempty"`
+	FirstAired     string         `json:"first_aired,omitempty"`
 	AiredAt        string         `json:"aired_at,omitempty"`
 	AbsoluteNumber *int           `json:"absolute_number,omitempty"`
+	UpdatedAt      string         `json:"updated_at,omitempty"`
 }
 
 // PersonResponse is the API response shape for a person.
@@ -241,7 +302,7 @@ func mediaBatchLookup(mediaType string, mediaID int64) map[mediaRef][]database.E
 // batch (no extra query). TMDB/IMDB come from the movie/show rows; slug and
 // TVDB come from the lookup.
 func buildIDsFromLookup(lookup map[mediaRef][]database.ExternalID, mediaType string, mediaID int64, movie *database.Movie, show *database.Show) IDs {
-	ids := IDs{ID: mediaID}
+	ids := IDs{ID: mediaID, Trakt: mediaID}
 
 	if movie != nil {
 		if movie.TmdbID != 0 {
@@ -288,6 +349,17 @@ func buildMovieResponse(lookup map[mediaRef][]database.ExternalID, m *database.M
 		Year:          year,
 		Images:        contractshape.MediaImages("movie", m.Images),
 		RatingSummary: buildRatingSummary(m.RatingAvg, m.RatingCount),
+		// The contract's own header fields, always present: a detail page reads
+		// these without asking for an extended level.
+		OriginalTitle:         m.OriginalTitle,
+		Released:              m.Released.String(),
+		Rating:                m.RatingAvg,
+		Votes:                 m.RatingCount,
+		Trailer:               m.TrailerURL,
+		Homepage:              metadataString(m.Metadata, "homepage"),
+		Country:               metadataString(m.Metadata, "country"),
+		AvailableTranslations: []string{},
+		UpdatedAt:             m.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 
 	// Apply extended level.
@@ -341,6 +413,15 @@ func buildShowResponse(lookup map[mediaRef][]database.ExternalID, s *database.Sh
 		Year:          year,
 		Images:        contractshape.MediaImages("show", s.Images),
 		RatingSummary: buildRatingSummary(s.RatingAvg, s.RatingCount),
+		// Header fields a detail page reads (see MovieResponse).
+		Rating:                s.RatingAvg,
+		Votes:                 s.RatingCount,
+		Trailer:               metadataString(s.Metadata, "trailer"),
+		Homepage:              metadataString(s.Metadata, "homepage"),
+		Country:               metadataString(s.Metadata, "country"),
+		AiredEpisodes:         s.EpisodeCount,
+		AvailableTranslations: []string{},
+		UpdatedAt:             s.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 
 	switch extended {
@@ -395,27 +476,92 @@ func BuildSeasonResponse(s *database.Season) SeasonResponse {
 func buildSeasonResponse(lookup map[mediaRef][]database.ExternalID, s *database.Season) SeasonResponse {
 	resp := SeasonResponse{
 		IDs:          buildIDsFromLookup(lookup, "season", s.ID, nil, nil),
+		Number:       s.SeasonNumber,
 		ShowID:       s.ShowID,
 		SeasonNumber: s.SeasonNumber,
 		EpisodeCount: s.EpisodeCount,
+		Title:        metadataString(s.Metadata, "title"),
+		Overview:     metadataString(s.Metadata, "overview"),
+		UpdatedAt:    s.UpdatedAt.UTC().Format(time.RFC3339),
 		// The contract's season images object requires poster and thumb, so the
 		// full key set is emitted even when the row holds neither.
 		Images: contractshape.MediaImages("season", s.Images),
 	}
 	if s.AiredAt != nil {
 		resp.AiredAt = s.AiredAt.String()
+		resp.FirstAired = s.AiredAt.String()
 	}
 	return resp
 }
 
 // BuildEpisodeResponse builds an EpisodeResponse from a database Episode.
+//
+// The row alone cannot say which season NUMBER it belongs to (it holds the
+// season's row id), so this looks the season up — one query per call. Use
+// BuildEpisodeResponses for a list.
 func BuildEpisodeResponse(e *database.Episode) EpisodeResponse {
-	return buildEpisodeResponse(mediaBatchLookup("episode", e.ID), e)
+	resp := buildEpisodeResponse(mediaBatchLookup("episode", e.ID), e)
+	if db, err := database.GetDB(); err == nil {
+		if number, ok := seasonNumbers(db, []int64{e.SeasonID})[e.SeasonID]; ok {
+			resp.Season = number
+		}
+	}
+	return resp
+}
+
+// BuildEpisodeResponses builds a list in two queries: one for the seasons the
+// episodes belong to and one batch for their external ids. The per-item builder
+// would run both once per episode.
+func BuildEpisodeResponses(episodes []database.Episode) []EpisodeResponse {
+	out := make([]EpisodeResponse, 0, len(episodes))
+	if len(episodes) == 0 {
+		return out
+	}
+	seasonIDs := make([]int64, 0, len(episodes))
+	refs := make([]mediaRef, 0, len(episodes))
+	for i := range episodes {
+		seasonIDs = append(seasonIDs, episodes[i].SeasonID)
+		refs = append(refs, mediaRef{mediaType: "episode", mediaID: episodes[i].ID})
+	}
+	numbers := map[int64]int{}
+	var lookup map[mediaRef][]database.ExternalID
+	if db, err := database.GetDB(); err == nil {
+		numbers = seasonNumbers(db, seasonIDs)
+		lookup = batchExternalIDs(db, refs)
+	}
+	for i := range episodes {
+		resp := buildEpisodeResponse(lookup, &episodes[i])
+		resp.Season = numbers[episodes[i].SeasonID]
+		out = append(out, resp)
+	}
+	return out
+}
+
+// seasonNumbers resolves season row ids to their season numbers in one query.
+// An unknown id is simply absent from the map.
+func seasonNumbers(db *gorm.DB, ids []int64) map[int64]int {
+	out := make(map[int64]int, len(ids))
+	if db == nil || len(ids) == 0 {
+		return out
+	}
+	var rows []struct {
+		ID           int64
+		SeasonNumber int
+	}
+	if err := db.Table("seasons").Select("id, season_number").Where("id IN ?", ids).Scan(&rows).Error; err != nil {
+		return out
+	}
+	for _, row := range rows {
+		out[row.ID] = row.SeasonNumber
+	}
+	return out
 }
 
 func buildEpisodeResponse(lookup map[mediaRef][]database.ExternalID, e *database.Episode) EpisodeResponse {
 	resp := EpisodeResponse{
 		IDs:            buildIDsFromLookup(lookup, "episode", e.ID, nil, nil),
+		Number:         e.EpisodeNumber,
+		NumberAbs:      e.AbsoluteNumber,
 		SeasonID:       e.SeasonID,
 		ShowID:         e.ShowID,
 		EpisodeNumber:  e.EpisodeNumber,
@@ -424,11 +570,28 @@ func buildEpisodeResponse(lookup map[mediaRef][]database.ExternalID, e *database
 		Runtime:        e.Runtime,
 		Images:         contractshape.MediaImages("episode", e.Images),
 		AbsoluteNumber: e.AbsoluteNumber,
+		UpdatedAt:      e.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 	if e.AiredAt != nil {
 		resp.AiredAt = e.AiredAt.String()
+		resp.FirstAired = e.AiredAt.String()
 	}
 	return resp
+}
+
+// metadataString reads a string out of a row's metadata blob, returning "" when
+// the key is absent or is not a string. It exists so the response builders can
+// serve a contract field the row keeps in `metadata` (a show has no column for
+// its homepage) without a nil-check at every call site.
+func metadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key].(string)
+	if !ok {
+		return ""
+	}
+	return value
 }
 
 // BuildPersonResponse builds a PersonResponse from a database Person.
@@ -534,3 +697,16 @@ func GetExtended(c *fiber.Ctx) string {
 
 // getExtended is the internal alias for GetExtended.
 func getExtended(c *fiber.Ctx) string { return GetExtended(c) }
+
+// detailExtended is getExtended for a DETAIL route: an explicit `?extended=`
+// wins, and the default is full. A detail page reads the overview, runtime,
+// rating, artwork and credits on its first paint, so making it ask for
+// `extended=full` only moves the cost into a second round trip — and every
+// client that forgets renders a header with half its fields missing. List
+// routes keep the minimal default; they serve many rows and a card needs little.
+func detailExtended(c *fiber.Ctx) string {
+	if extended := getExtended(c); extended != "min" {
+		return extended
+	}
+	return "full"
+}

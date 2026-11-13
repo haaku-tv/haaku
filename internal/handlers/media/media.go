@@ -137,7 +137,10 @@ func handleGetMovie(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	extended := getExtended(c)
+	// A detail route serves the full object: the page's hero reads the overview,
+	// runtime, rating and artwork on its first paint. `?extended=` still narrows
+	// it for a client that asks for less.
+	extended := detailExtended(c)
 	resp := BuildMovieResponse(&movie, extended)
 	return c.JSON(resp)
 }
@@ -247,7 +250,7 @@ func handleGetShow(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	extended := getExtended(c)
+	extended := detailExtended(c)
 
 	// Fetch seasons.
 	var seasons []database.Season
@@ -366,20 +369,7 @@ func handleGetShowSeasonEpisodes(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	// Batch external_ids for all episodes in one query, then build responses
-	// from that shared lookup.
-	refs := make([]mediaRef, 0, len(episodes))
-	for _, e := range episodes {
-		refs = append(refs, mediaRef{mediaType: "episode", mediaID: e.ID})
-	}
-	lookup := batchExternalIDs(db, refs)
-
-	resp := make([]EpisodeResponse, 0, len(episodes))
-	for _, e := range episodes {
-		resp = append(resp, buildEpisodeResponse(lookup, &e))
-	}
-
-	return c.JSON(resp)
+	return c.JSON(BuildEpisodeResponses(episodes))
 }
 
 func handleGetShowEpisode(c *fiber.Ctx) error {

@@ -261,8 +261,10 @@ export function useComments(params: {
       if (params?.page) searchParams.page = String(params.page)
       if (params?.limit) searchParams.limit = String(params.limit)
 
+      // The comments route carries the sort segment; without it the API has no
+      // handler to match and answers 404, not an empty page.
       const path =
-        `/v1/${params.mediaType}s/${params.mediaId}/comments` as const
+        `/v1/${params.mediaType}s/${params.mediaId}/comments/newest` as const
       const res = await api.GET(
         path as never,
         {

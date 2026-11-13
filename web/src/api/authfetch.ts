@@ -8,9 +8,8 @@
  */
 
 import { ApiError } from '@/api/fetch'
+import { apiURL } from '@/api/url'
 import { clearSessionOnUnauthorized } from '@/auth/session-store'
-
-const BASE_URL = import.meta.env.VITE_API_URL || '/'
 
 /** An API error that also carries the machine code and Retry-After, if any. */
 export class AuthRequestError extends ApiError {
@@ -58,7 +57,7 @@ export async function authFetch<T>(
   if (body !== undefined) headers['content-type'] = 'application/json'
   if (token) headers.authorization = `Bearer ${token}`
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(apiURL(path), {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
