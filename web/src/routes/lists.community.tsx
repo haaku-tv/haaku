@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui'
+import { listRowID } from '@/lib/ids'
 
 export const Route = createFileRoute('/lists/community')({
   component: CommunityListsPage,
@@ -99,7 +100,7 @@ function CommunityListsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {lists.map((list) => (
-              <ListCard key={list.ids.trakt} list={list} showActions={false} />
+              <ListCard key={listRowID(list)} list={list} showActions={false} />
             ))}
           </div>
         )}

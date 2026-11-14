@@ -275,7 +275,7 @@ function ListDetailPage() {
                 icon: <Edit className="size-4" />,
                 onSelect: () => {
                   setEditName(list.name)
-                  setEditDesc(list.description)
+                  setEditDesc(list.description ?? '')
                   setEditPrivacy(list.privacy)
                   setEditOpen(true)
                 },

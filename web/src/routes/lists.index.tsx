@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui'
+import { listRowID } from '@/lib/ids'
 
 export const Route = createFileRoute('/lists/')({
   component: MyListsPage,
@@ -87,7 +88,7 @@ function MyListsPage() {
     if (!editList || !formName.trim()) return
     updateList.mutate(
       {
-        id: editList.ids.trakt,
+        id: listRowID(editList),
         payload: {
           name: formName.trim(),
           description: formDesc.trim() || undefined,
@@ -107,7 +108,7 @@ function MyListsPage() {
 
   const handleDelete = () => {
     if (!deleteConfirm) return
-    deleteList.mutate(deleteConfirm.ids.trakt, {
+    deleteList.mutate(listRowID(deleteConfirm), {
       onSuccess: () => setDeleteConfirm(null),
     })
   }
@@ -115,12 +116,12 @@ function MyListsPage() {
   const openEdit = (list: TraktList) => {
     setEditList(list)
     setFormName(list.name)
-    setFormDesc(list.description)
+    setFormDesc(list.description ?? '')
     setFormPrivacy(list.privacy)
   }
 
   const handleShare = async (list: TraktList) => {
-    const url = `${window.location.origin}/lists/${list.ids.trakt}`
+    const url = `${window.location.origin}/lists/${listRowID(list)}`
     try {
       await navigator.clipboard.writeText(url)
     } catch {
@@ -200,7 +201,7 @@ function MyListsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {displayedLists.map((list) => (
               <ListCard
-                key={list.ids.trakt}
+                key={listRowID(list)}
                 list={list}
                 onEdit={openEdit}
                 onDelete={setDeleteConfirm}

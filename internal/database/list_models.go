@@ -30,14 +30,17 @@ func (List) TableName() string { return "lists" }
 
 // ListItem represents an item within a list (T4.1).
 type ListItem struct {
-	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	ListID    int64     `gorm:"not null;uniqueIndex:idx_listitem_dedupe,priority:1" json:"list_id"`
-	MediaType string    `gorm:"type:text;not null;uniqueIndex:idx_listitem_dedupe,priority:2" json:"media_type"`
-	MediaID   int64     `gorm:"not null;uniqueIndex:idx_listitem_dedupe,priority:3" json:"media_id"`
-	Rank      int       `gorm:"not null;default:0" json:"rank"`
-	Notes     string    `gorm:"type:text;default:''" json:"notes,omitempty"`
-	AddedBy   string    `gorm:"type:text;not null" json:"added_by"`
-	AddedAt   time.Time `json:"added_at"`
+	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	ListID    int64  `gorm:"not null;uniqueIndex:idx_listitem_dedupe,priority:1" json:"list_id"`
+	MediaType string `gorm:"type:text;not null;uniqueIndex:idx_listitem_dedupe,priority:2" json:"media_type"`
+	MediaID   int64  `gorm:"not null;uniqueIndex:idx_listitem_dedupe,priority:3" json:"media_id"`
+	Rank      int    `gorm:"not null;default:0" json:"rank"`
+	Notes     string `gorm:"type:text;default:''" json:"notes,omitempty"`
+	AddedBy   string `gorm:"type:text;not null" json:"added_by"`
+	// autoCreateTime matters: the column defaults to now() in SQL, but GORM
+	// inserts the zero value unless told otherwise, so every item stored by a
+	// handler carried 0001-01-01 as its listed_at.
+	AddedAt time.Time `gorm:"autoCreateTime" json:"added_at"`
 }
 
 func (ListItem) TableName() string { return "list_items" }

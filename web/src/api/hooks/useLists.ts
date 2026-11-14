@@ -15,6 +15,7 @@ import type {
   ReorderListItemPayload,
   SearchResult,
   SmartList,
+  SmartListItem,
   TraktList,
   TrendingList,
   UpdateListPayload,
@@ -53,6 +54,10 @@ export const listKeys = {
     [...listKeys.all, 'smart', 'items', id, page ?? 1] as const,
   trending: () => [...listKeys.all, 'trending'] as const,
   popular: (period: string) => [...listKeys.all, 'popular', period] as const,
+  /** Lists of the caller that hold one media row (the media page's chips). */
+  membership: (type: string, mediaID: number) =>
+    [...listKeys.all, 'containing', type, mediaID] as const,
+  membershipPrefix: () => [...listKeys.all, 'containing'] as const,
 }
 
 const ME = 'me'
@@ -67,9 +72,34 @@ export function useMyLists(client: ApiClient | null) {
         params: { path: { id: ME } },
       } as never)
       if (error) throw error
-      return (data as unknown as TraktList[]) ?? []
+      return rowsOf<TraktList>(data)
     },
     enabled: !!client,
+  })
+}
+
+// ─── Membership (which of my lists hold this title) ──────
+/**
+ * useListMembership answers "is this title in any of my lists?" for the media
+ * pages. It reads a single reverse-index endpoint rather than walking the
+ * caller's lists and paging each one's items.
+ */
+export function useListMembership(
+  client: ApiClient | null,
+  type: 'movie' | 'show' | 'season' | 'episode',
+  mediaID: number
+) {
+  return useQuery({
+    queryKey: listKeys.membership(type, mediaID),
+    queryFn: async (): Promise<TraktList[]> => {
+      const api = requireClient(client)
+      const { data, error } = await api.GET('/v1/users/me/lists/containing', {
+        params: { query: { type, media_id: String(mediaID) } },
+      } as never)
+      if (error) throw error
+      return rowsOf<TraktList>(data)
+    },
+    enabled: !!client && mediaID > 0,
   })
 }
 
@@ -81,7 +111,7 @@ export function useCollaborations(client: ApiClient | null) {
       const api = requireClient(client)
       const { data, error } = await api.GET('/v1/users/me/lists/collaborations')
       if (error) throw error
-      return (data as unknown as TraktList[]) ?? []
+      return rowsOf<TraktList>(data)
     },
     enabled: !!client,
   })
@@ -102,6 +132,7 @@ export function useCreateList(client: ApiClient | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: listKeys.mine() })
       qc.invalidateQueries({ queryKey: listKeys.collaborations() })
+      qc.invalidateQueries({ queryKey: listKeys.membershipPrefix() })
       toast.success('List created')
     },
     onError: () => {
@@ -154,6 +185,7 @@ export function useDeleteList(client: ApiClient | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: listKeys.mine() })
       qc.invalidateQueries({ queryKey: listKeys.collaborations() })
+      qc.invalidateQueries({ queryKey: listKeys.membershipPrefix() })
       toast.success('List deleted')
     },
     onError: () => {
@@ -193,7 +225,8 @@ export function useListItems(
         params: { path: { id: String(id) }, query: { page, limit } },
       } as never)
       if (error) throw error
-      return (data as unknown as ListItem[]) ?? []
+      // Bare array of contract item objects ({rank,id,listed_at,type,movie…}).
+      return rowsOf<ListItem>(data)
     },
     enabled: !!client && !!id,
   })
@@ -221,7 +254,9 @@ export function useAddToList(client: ApiClient | null) {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: listKeys.items(id) })
       qc.invalidateQueries({ queryKey: listKeys.detail(id) })
-      toast.success('Items added to list')
+      // Every write to a list's items can change a media page's chips.
+      qc.invalidateQueries({ queryKey: listKeys.membershipPrefix() })
+      toast.success('Added to list')
     },
     onError: () => {
       toast.error('Failed to add items')
@@ -250,7 +285,8 @@ export function useRemoveFromList(client: ApiClient | null) {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: listKeys.items(id) })
       qc.invalidateQueries({ queryKey: listKeys.detail(id) })
-      toast.success('Items removed from list')
+      qc.invalidateQueries({ queryKey: listKeys.membershipPrefix() })
+      toast.success('Removed from list')
     },
     onError: () => {
       toast.error('Failed to remove items')
@@ -544,13 +580,13 @@ export function useSmartListItems(
 ) {
   return useQuery({
     queryKey: listKeys.smartItems(id, page),
-    queryFn: async (): Promise<ListItem[]> => {
+    queryFn: async (): Promise<SmartListItem[]> => {
       const api = requireClient(client)
       const { data, error } = await api.GET('/v1/smart-lists/{id}/items', {
         params: { path: { id: String(id) }, query: { page, limit } },
       } as never)
       if (error) throw error
-      return (data as unknown as ListItem[]) ?? []
+      return rowsOf<SmartListItem>(data)
     },
     enabled: !!client && !!id,
   })

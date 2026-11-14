@@ -26,6 +26,7 @@ import {
   StatCard,
 } from '@/components/ui'
 import type { DropdownItem } from '@/design-kit-components/ui/dropdown'
+import { listRowID } from '@/lib/ids'
 import { cn } from '@/lib/utils'
 
 export interface ListCardProps {
@@ -54,7 +55,8 @@ export function ListCard({
   className,
 }: ListCardProps) {
   const privacy = privacyConfig[list.privacy] ?? privacyConfig.private
-  const colorIndex = list.ids.trakt % COLORS.length
+  const id = listRowID(list)
+  const colorIndex = id % COLORS.length
   const color = COLORS[colorIndex]
 
   const actionItems: DropdownItem[] = []
@@ -79,11 +81,7 @@ export function ListCard({
     })
 
   return (
-    <Link
-      to="/lists/$id"
-      params={{ id: String(list.ids.trakt) }}
-      className="block group"
-    >
+    <Link to="/lists/$id" params={{ id: String(id) }} className="block group">
       <Card
         color={color}
         hoverScale
