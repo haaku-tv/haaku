@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useApi } from '@/api/client'
+import type { paths } from '@/api/generated/schema'
 import { Page, Section } from '@/components/layout'
 import {
   Badge,
@@ -26,6 +27,10 @@ import {
   ShimmerText,
   StatCard,
 } from '@/components/ui'
+
+/** The contract's stats body: per-type blocks, not flat totals. */
+type UserStatsResponse =
+  paths['/v1/users/{id}/stats']['get']['responses'][200]['content']['application/json']
 
 export const Route = createFileRoute('/profile')({
   component: ProfilePage,
@@ -50,8 +55,11 @@ function ProfilePage() {
     queryKey: ['profile', 'stats'],
     queryFn: async () => {
       if (!api) return null
+      // The generated spec does not emit path-parameter declarations (the route
+      // registry carries none), so the typed client cannot take {id} — call the
+      // literal path and pin the body to the generated response type instead.
       const res = await api.GET('/v1/users/me/stats' as never)
-      return res.data as unknown as Record<string, unknown> | null
+      return (res.data as unknown as UserStatsResponse | undefined) ?? null
     },
     enabled: !!api,
   })
@@ -124,11 +132,12 @@ function ProfilePage() {
     | boolean
     | undefined
 
-  // /v1/users/me/stats is flat: {user_id, plays, minutes, unique_movies,
-  // unique_shows, unique_episodes, ratings_count}. It has no per-type `watched`
-  // block, so reading stats.movies.watched showed 0 plays forever.
-  const statsData = stats as Record<string, number> | null
-  const statValue = (key: string) => String(statsData?.[key] ?? 0)
+  // /v1/users/me/stats answers the contract's per-type blocks:
+  // {movies,shows,seasons,episodes:{plays,watched,...},network,ratings,
+  // total_plays,total_minutes}. There are no flat plays/unique_movies keys —
+  // reading those left every card at 0 — so the cards read the nested fields.
+  const statValue = (value: number | undefined) => String(value ?? 0)
+  const totalPlays = (stats?.movies?.plays ?? 0) + (stats?.episodes?.plays ?? 0)
 
   const isLoading = profileLoading || statsLoading
 
@@ -213,19 +222,19 @@ function ProfilePage() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatCard
                 label="Watched"
-                value={statValue('plays')}
+                value={statValue(totalPlays)}
                 icon={Eye}
                 badgeColor="purple"
               />
               <StatCard
                 label="Movies"
-                value={statValue('unique_movies')}
+                value={statValue(stats?.movies?.watched)}
                 icon={Film}
                 badgeColor="blue"
               />
               <StatCard
                 label="Shows"
-                value={statValue('unique_shows')}
+                value={statValue(stats?.shows?.watched)}
                 icon={Tv}
                 badgeColor="green"
               />

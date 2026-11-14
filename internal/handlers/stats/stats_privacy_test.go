@@ -43,10 +43,23 @@ func statsPrivacyDB(t *testing.T) *gorm.DB {
 		&database.UserFollow{},
 		&database.UserBlock{},
 		&database.UserStats{},
+		// The stats payload is an aggregate over these tables (issue #98), so
+		// they have to exist even for the privacy tests, which exercise the
+		// same handler.
+		&database.Movie{},
+		&database.Episode{},
+		&database.UserHistory{},
+		&database.UserCollection{},
+		&database.UserRating{},
+		&database.Comment{},
 	); err != nil {
 		t.Fatalf("migrate test DB: %v", err)
 	}
-	for _, table := range []string{"users", "user_follows", "user_blocks", "user_stats"} {
+	for _, table := range []string{
+		"users", "user_follows", "user_blocks", "user_stats",
+		"movies", "episodes", "user_history", "user_collection",
+		"user_ratings", "comments",
+	} {
 		if err := db.Exec("DELETE FROM " + table).Error; err != nil {
 			t.Fatalf("clear %s: %v", table, err)
 		}

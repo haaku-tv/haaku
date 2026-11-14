@@ -21072,6 +21072,157 @@ paths:
             operationId: _v1_users_id_stats_GET
             responses:
                 "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    episodes:
+                                        properties:
+                                            collected:
+                                                type: integer
+                                            comments:
+                                                type: integer
+                                            minutes:
+                                                type: integer
+                                            plays:
+                                                type: integer
+                                            ratings:
+                                                type: integer
+                                            watched:
+                                                type: integer
+                                        required:
+                                            - plays
+                                            - minutes
+                                            - watched
+                                            - collected
+                                            - ratings
+                                            - comments
+                                        type: object
+                                    movies:
+                                        properties:
+                                            collected:
+                                                type: integer
+                                            comments:
+                                                type: integer
+                                            minutes:
+                                                type: integer
+                                            plays:
+                                                type: integer
+                                            ratings:
+                                                type: integer
+                                            watched:
+                                                type: integer
+                                        required:
+                                            - plays
+                                            - minutes
+                                            - watched
+                                            - collected
+                                            - ratings
+                                            - comments
+                                        type: object
+                                    network:
+                                        properties:
+                                            followers:
+                                                type: integer
+                                            following:
+                                                type: integer
+                                            friends:
+                                                type: integer
+                                        required:
+                                            - friends
+                                            - followers
+                                            - following
+                                        type: object
+                                    ratings:
+                                        properties:
+                                            distribution:
+                                                properties:
+                                                    "1":
+                                                        format: float
+                                                        type: number
+                                                    "2":
+                                                        format: float
+                                                        type: number
+                                                    "3":
+                                                        format: float
+                                                        type: number
+                                                    "4":
+                                                        format: float
+                                                        type: number
+                                                    "5":
+                                                        format: float
+                                                        type: number
+                                                    "6":
+                                                        format: float
+                                                        type: number
+                                                    "7":
+                                                        format: float
+                                                        type: number
+                                                    "8":
+                                                        format: float
+                                                        type: number
+                                                    "9":
+                                                        format: float
+                                                        type: number
+                                                    "10":
+                                                        format: float
+                                                        type: number
+                                                required:
+                                                    - "1"
+                                                    - "2"
+                                                    - "3"
+                                                    - "4"
+                                                    - "5"
+                                                    - "6"
+                                                    - "7"
+                                                    - "8"
+                                                    - "9"
+                                                    - "10"
+                                                type: object
+                                            total:
+                                                type: integer
+                                        required:
+                                            - total
+                                            - distribution
+                                        type: object
+                                    seasons:
+                                        properties:
+                                            comments:
+                                                type: integer
+                                            ratings:
+                                                type: integer
+                                        required:
+                                            - ratings
+                                            - comments
+                                        type: object
+                                    shows:
+                                        properties:
+                                            collected:
+                                                type: integer
+                                            comments:
+                                                type: integer
+                                            ratings:
+                                                type: integer
+                                            watched:
+                                                type: integer
+                                        required:
+                                            - watched
+                                            - collected
+                                            - ratings
+                                            - comments
+                                        type: object
+                                    total_minutes:
+                                        type: integer
+                                    total_plays:
+                                        type: integer
+                                required:
+                                    - seasons
+                                    - shows
+                                    - movies
+                                    - episodes
+                                    - network
+                                    - ratings
+                                type: object
                     description: User stats
                 "400":
                     content:
@@ -21124,7 +21275,7 @@ paths:
             security:
                 - apiKey: []
                 - oauth: []
-            summary: Get user statistics (plays, minutes, unique media counts, ratings)
+            summary: Get user statistics (per-type plays, watched, minutes, collected, ratings and comments)
             tags:
                 - Users
     /v1/users/{id}/watched/{type}:

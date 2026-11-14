@@ -1279,7 +1279,8 @@ sections:
   - trakt: GET /users/{id}/stats
     ours: GET /v1/users/{id}/stats
     status: implemented
-    rationale: Served at GET /v1/users/{id}/stats; the path shape matches the contract.
+    rationale: Served at GET /v1/users/{id}/stats in the contract's shape — movies/shows/seasons/episodes blocks (plays, watched, minutes, collected, ratings, comments), the network block, and the 1..10 ratings distribution, aggregated from user_history/user_collection/user_ratings/comments/user_follows; a user with no activity answers zeroed blocks rather than an empty object.
+    compat: the contract's nullable `progress` and `lists` keys are not sent — no show started/finished/dropped state is stored, and a list count would include private lists in a stranger's view of a public profile. `total_plays` and `total_minutes` carry the lifetime totals.
   - trakt: GET /users/{id}/watched/movies
     ours: GET /v1/users/{id}/watched/movies
     status: implemented

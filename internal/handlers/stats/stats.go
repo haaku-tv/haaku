@@ -28,11 +28,12 @@ func init() {
 func registerOpenAPIRoutes() {
 	routes := []openapi.RouteDef{
 		{
-			Method:  "GET",
-			Path:    "/v1/users/{id}/stats",
-			Summary: "Get user statistics (plays, minutes, unique media counts, ratings)",
-			Tags:    []string{"Users"},
-			Auth:    "optional",
+			Method:       "GET",
+			Path:         "/v1/users/{id}/stats",
+			Summary:      "Get user statistics (per-type plays, watched, minutes, collected, ratings and comments)",
+			Tags:         []string{"Users"},
+			Auth:         "optional",
+			ResponseType: userStatsSchema(),
 			StatusCodes: map[int]string{
 				200: "User stats",
 				403: "Private profile",
@@ -101,13 +102,13 @@ func handleGetUserStats(c *fiber.Ctx) error {
 	// Serve a version-keyed cached response when one exists for the user's
 	// current version. The version is embedded in the key, so a history/data
 	// write that bumps the user version counter makes this miss automatically
-	// and the recompute path below runs. Redis is best-effort: any miss or
+	// and the rebuild path below runs. Redis is best-effort: any miss or
 	// outage falls through to the DB-backed read.
 	if resp, ok := getVersionKeyedStatsResponse(userID); ok {
 		return c.JSON(resp)
 	}
 
-	// Try fetching cached stats.
+	// Try fetching the last compute marker.
 	cachedStats, err := statsengine.GetUserStats(db, userID)
 	if err != nil {
 		log.Printf("[stats] failed to fetch cached stats for %s: %v", userID, err)
@@ -117,23 +118,17 @@ func handleGetUserStats(c *fiber.Ctx) error {
 	// Recompute if no stats, stale > 1h, or the user version counter has
 	// advanced since the last compute (history/data writes bump it, so stats
 	// stop serving stale data after history changes instead of waiting an hour).
+	var payload statsengine.Payload
 	if cachedStats == nil || isStale(cachedStats.ComputedAt) || statsVersionMismatch(userID) {
 		log.Printf("[stats] recomputing stats for user %s", userID)
-		recomputed, rerr := recomputeUserStats(userID)
+		recomputed, fresh, rerr := recomputeUserStats(userID)
 		if rerr != nil {
 			// A recompute failure is a service-side fault — surface it instead
 			// of hiding the outage behind a 200-with-zeroed-stats body.
 			log.Printf("[stats] failed to recompute stats for %s: %v", userID, rerr)
 			return response.ServiceUnavailable(c, "stats are temporarily unavailable")
 		}
-
-		// Re-fetch the freshly computed stats.
-		fresh, ferr := statsengine.GetUserStats(db, userID)
-		if ferr != nil {
-			log.Printf("[stats] failed to re-fetch recomputed stats for %s: %v", userID, ferr)
-			return response.ServiceUnavailable(c, "stats are temporarily unavailable")
-		}
-		cachedStats = fresh
+		payload = fresh
 
 		if recomputed {
 			// Bump user version for cache invalidation, then snapshot it so the
@@ -146,36 +141,23 @@ func handleGetUserStats(c *fiber.Ctx) error {
 			}
 			storeStatsVersionSnapshot(userID)
 		}
-	}
-
-	if cachedStats == nil {
-		// Return zero stats.
-		return c.JSON(StatsResponse{
-			UserID:         userID,
-			Plays:          0,
-			Minutes:        0,
-			UniqueMovies:   0,
-			UniqueShows:    0,
-			UniqueEpisodes: 0,
-			RatingsCount:   0,
-		})
-	}
-
-	resp := StatsResponse{
-		UserID:         cachedStats.UserID,
-		Plays:          cachedStats.Plays,
-		Minutes:        cachedStats.Minutes,
-		UniqueMovies:   cachedStats.UniqueMovies,
-		UniqueShows:    cachedStats.UniqueShows,
-		UniqueEpisodes: cachedStats.UniqueEpisodes,
-		RatingsCount:   cachedStats.RatingsCount,
+	} else {
+		// Fresh enough: the payload is an aggregate over stored rows, so it is
+		// read straight from them rather than from the user_stats row (which
+		// carries only the flat lifetime totals and the compute timestamp).
+		fresh, perr := statsengine.ComputeUserStatsPayload(db, userID)
+		if perr != nil {
+			log.Printf("[stats] failed to aggregate stats for %s: %v", userID, perr)
+			return response.ServiceUnavailable(c, "stats are temporarily unavailable")
+		}
+		payload = fresh
 	}
 
 	// Persist the serialized response under the user's current version so the
 	// next request can serve it without hitting the DB/compute path.
-	storeVersionKeyedStatsResponse(userID, resp)
+	storeVersionKeyedStatsResponse(userID, payload)
 
-	return c.JSON(resp)
+	return c.JSON(payload)
 }
 
 // ---------------------------------------------------------------------------
@@ -188,8 +170,12 @@ func handleGetUserStats(c *fiber.Ctx) error {
 // for orphaned versions from a user whose counter was reset.
 const statsResponseCacheTTL = 7 * 24 * time.Hour
 
+// statsResponseKey namespaces the cached response by payload shape (`v2`) as
+// well as by user version, so entries serialized in the old flat shape (which
+// would unmarshal into an all-zero payload) can never be served. Correctness
+// still rests on the embedded user version.
 func statsResponseKey(userID string, version int64) string {
-	return fmt.Sprintf("stats:response:%s:v%d", userID, version)
+	return fmt.Sprintf("stats:response:v2:%s:v%d", userID, version)
 }
 
 // getVersionKeyedStatsResponse serves the user's stats from Redis when an entry
@@ -238,16 +224,12 @@ func storeVersionKeyedStatsResponse(userID string, resp StatsResponse) {
 // Types
 // ---------------------------------------------------------------------------
 
-// StatsResponse is the JSON response for GET /v1/users/:id/stats.
-type StatsResponse struct {
-	UserID         string `json:"user_id"`
-	Plays          int64  `json:"plays"`
-	Minutes        int64  `json:"minutes"`
-	UniqueMovies   int    `json:"unique_movies"`
-	UniqueShows    int    `json:"unique_shows"`
-	UniqueEpisodes int    `json:"unique_episodes"`
-	RatingsCount   int    `json:"ratings_count"`
-}
+// StatsResponse is the JSON body of GET /v1/users/:id/stats. It is the engine's
+// contract-shaped payload (see stats.Payload): the per-type blocks the contract
+// declares, always present and zeroed for a user with no activity. Kept as an
+// alias rather than a parallel struct so the handler, the version-keyed cache
+// and the OpenAPI schema cannot drift into three slightly different shapes.
+type StatsResponse = statsengine.Payload
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -263,10 +245,13 @@ func isStale(t *time.Time) bool {
 // recomputeUserStats recomputes a user's stats under a per-user advisory lock
 // (mirroring checkin/sync) so concurrent stale requests don't both recompute.
 // It re-checks staleness after acquiring the lock — if a concurrent request
-// already recomputed fresh stats while we waited, it returns recomputed=false
-// and leaves them alone. Returns whether this call performed the recompute.
-func recomputeUserStats(userID string) (bool, error) {
+// already recomputed fresh stats while we waited, it skips the write, but it
+// still aggregates the payload under the lock so the caller always gets the
+// numbers the lock was taken to protect. Returns whether this call performed
+// the recompute, and the contract-shaped payload.
+func recomputeUserStats(userID string) (bool, statsengine.Payload, error) {
 	recomputed := false
+	payload := statsengine.EmptyPayload()
 
 	err := cache.WithCacheTransaction(func(tx *gorm.DB) (*cache.CacheTransaction, error) {
 		cacheTx := cache.NewCacheTransaction()
@@ -279,21 +264,24 @@ func recomputeUserStats(userID string) (bool, error) {
 		if cerr != nil {
 			return nil, fmt.Errorf("fetch current stats under lock: %w", cerr)
 		}
-		if cur != nil && !isStale(cur.ComputedAt) && !statsVersionMismatch(userID) {
-			// Another concurrent request already recomputed — nothing to do.
-			return cacheTx, nil
+		if cur == nil || isStale(cur.ComputedAt) || statsVersionMismatch(userID) {
+			if err := statsengine.ComputeUserStats(tx, userID); err != nil {
+				return nil, fmt.Errorf("compute stats: %w", err)
+			}
+			recomputed = true
 		}
 
-		if err := statsengine.ComputeUserStats(tx, userID); err != nil {
-			return nil, fmt.Errorf("compute stats: %w", err)
+		fresh, perr := statsengine.ComputeUserStatsPayload(tx, userID)
+		if perr != nil {
+			return nil, fmt.Errorf("compute stats payload: %w", perr)
 		}
-		recomputed = true
+		payload = fresh
 		return cacheTx, nil
 	})
 	if err != nil {
-		return false, err
+		return false, statsengine.EmptyPayload(), err
 	}
-	return recomputed, nil
+	return recomputed, payload, nil
 }
 
 // statsVersionSnapshotTTL governs how long a stats version snapshot lives in
