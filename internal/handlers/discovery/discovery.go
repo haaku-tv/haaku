@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -196,19 +197,32 @@ func relatedItems(c *fiber.Ctx, db *gorm.DB, kind string, id int64, limit int) (
 	if kind == "show" {
 		table = "shows"
 	}
-	if err := db.Table(table).Select("tmdb_id").Where("id = ?", id).Scan(&tmdbID).Error; err != nil || tmdbID <= 0 {
+	if scanErr := db.Table(table).Select("tmdb_id").Where("id = ?", id).Scan(&tmdbID).Error; scanErr != nil {
+		slog.Debug("[recommend] could not read the provider id", "kind", kind, "id", id, "error", scanErr)
+	}
+	if tmdbID <= 0 {
 		return trim(engineItems, limit), nil
 	}
 
-	tmdbIDs, err := resolver.ProviderRecommendations(c.UserContext(), []metadata.RecommendationSeed{
+	var tmdbIDs []int
+	if ids, provErr := resolver.ProviderRecommendations(c.UserContext(), []metadata.RecommendationSeed{
 		{Kind: kind, TmdbID: tmdbID, Weight: 1},
-	}, limit*2)
-	if err != nil || len(tmdbIDs) == 0 {
+	}, limit*2); provErr == nil {
+		tmdbIDs = ids
+	} else {
+		slog.Debug("[recommend] provider related failed", "kind", kind, "id", id, "error", provErr)
+	}
+	if len(tmdbIDs) == 0 {
 		return trim(engineItems, limit), nil
 	}
 
-	localIDs, err := resolver.LocalIDsForTmdb(c.UserContext(), kind, tmdbIDs)
-	if err != nil {
+	var localIDs []int64
+	if ids, mapErr := resolver.LocalIDsForTmdb(c.UserContext(), kind, tmdbIDs); mapErr == nil {
+		localIDs = ids
+	} else {
+		slog.Debug("[recommend] could not map provider ids", "kind", kind, "error", mapErr)
+	}
+	if len(localIDs) == 0 {
 		return trim(engineItems, limit), nil
 	}
 
