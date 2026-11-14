@@ -4,7 +4,7 @@
 
 Public "what changed recently" endpoints (sync-scraper friendly), no auth:
 
-- `GET /v1/movies/updates/:start_date` — movies with `updated_at >= start_date`, ordered `updated_at DESC`.
+- `GET /v1/movies/updates/:start_date` — movies with `updated_at >= start_date`, ordered `updated_at DESC`; each item is the contract's `{updated_at, movie}` pair (`updated_at` from the stored column the window filter selects on).
 - `GET /v1/shows/updates/:start_date` — same for shows.
 - `GET /v1/people/updates/:start_date` — same for people.
 - `GET /v1/movies/updates/id/:start_date` — bare `int[]` of the IDs of movies with `updated_at >= start_date` (Trakt's cheap sync poll).
@@ -25,7 +25,7 @@ Each full feed paginates (`page`/`limit`, default 25, max 100) and honors `exten
 
 ## Oversights
 
-- **Response has no `updated_at`** — clients can't tell which entity changed or when; Trakt's updates endpoint returns timestamps. The list is just media objects.
+- **Response has no `updated_at` (RESOLVED for movies)** — clients can't tell which entity changed or when; Trakt's updates endpoint returns timestamps. The movies feed now serves the contract's `{updated_at, movie}` item (the timestamp is the stored `movies.updated_at`) and validates against the vendored document in `movie_updates_feed_test.go`. The shows and people feeds still serve a bare array and are tracked separately.
 - **Local builders duplicate `media`'s** — `buildMovieResponse`/`buildShowResponse`/`buildPersonResponse`/`buildMovieIDs`/`buildShowIDs` reimplement what `media` already exports (`BuildMovieResponse`, `BuildShowResponse`); the extended switch uses `fallthrough` magic and an `if extended == "all"` re-set block that sets fields twice. Drift risk (already diverging: no trailer/status handling parity).
 - **`case "images":` is empty** — images are always embedded in the base response, so the "images" extended level is a no-op; also `"metadata"` only sets `Metadata` (no fallthrough to images semantics).
 - **`notFound` helper is dead code** — defined, never called.
@@ -37,7 +37,7 @@ Each full feed paginates (`page`/`limit`, default 25, max 100) and honors `exten
 
 ## Todos
 
-- [ ] Include `updated_at` (and entity id) in responses.
+- [x] Include `updated_at` (and entity id) in responses. (Movies feed — the contract's `{updated_at, movie}` item, #141. Shows/people feeds still serve a bare array.)
 - [x] Reuse `media` builders (`BuildMovieResponse`/`BuildShowResponse`/`BuildPersonResponse`) instead of the local duplicates; person IDs now preserve tmdb/imdb in media's builder (Batch 5).
 - [x] Add Redis caching with a short TTL. (Batch 9 — 90s TTL keyed by type/start_date/page/limit/extended; best-effort, DB fallback.)
 - [ ] Consider supporting timestamp `start_date` and an `end_date` filter per spec.

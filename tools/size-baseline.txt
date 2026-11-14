@@ -1,7 +1,7 @@
 # Size ratchet baseline. Format: <lines>\t<path>
 # These files are already over the 800-line soft limit and may only shrink.
 # Regenerate deliberately: scripts/check-size.sh --update
-1672	internal/handlers/lists/lists.go
+1644	internal/handlers/lists/lists.go
 1560	internal/handlers/sync/sync.go
 834	internal/handlers/comments/comments.go
 825	_tests_/metadata_test.go

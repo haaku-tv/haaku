@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/haaku-tv/haaku/internal/contractshape"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/handlers/media"
 	"github.com/haaku-tv/haaku/internal/openapi"
@@ -113,6 +114,20 @@ func RegisterRoutes(api fiber.Router) {
 // Handlers
 // ---------------------------------------------------------------------------
 
+// movieUpdateEntry is one item of the contract's movies updates feed.
+//
+// The contract's item schema for GET /movies/updates/{start_date} requires two
+// keys — `updated_at` and `movie` — and the movie object in turn requires
+// `title` and `ids` (ids: `trakt`, `slug`). Serving a bare movie array put
+// either key at the top level, so every item was missing the required
+// `updated_at`/`movie` pair; the entry below is that pair, with the timestamp
+// taken from the stored `movies.updated_at` the feed is selected on, so it is
+// the same clock the window filter used and never a sentinel.
+type movieUpdateEntry struct {
+	UpdatedAt string              `json:"updated_at"`
+	Movie     media.MovieResponse `json:"movie"`
+}
+
 // handleMovieUpdates returns movies updated since start_date.
 func handleMovieUpdates(c *fiber.Ctx) error {
 	startDate, err := time.Parse("2006-01-02", c.Params("start_date"))
@@ -149,9 +164,12 @@ func handleMovieUpdates(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database query error")
 	}
 
-	resp := make([]media.MovieResponse, 0, len(movies))
-	for _, m := range movies {
-		resp = append(resp, media.BuildMovieResponse(&m, extended))
+	resp := make([]movieUpdateEntry, 0, len(movies))
+	for i := range movies {
+		resp = append(resp, movieUpdateEntry{
+			UpdatedAt: contractshape.Timestamp(movies[i].UpdatedAt),
+			Movie:     media.BuildMovieResponse(&movies[i], extended),
+		})
 	}
 
 	updatesSetCache(cacheKey, updatesCacheEnvelope{Total: total, Count: len(resp), Body: mustMarshal(resp)})
@@ -271,12 +289,18 @@ type updatesCacheEnvelope struct {
 	Body  json.RawMessage `json:"body"`
 }
 
+// updatesFeedShapeVersion is part of every feed cache key, so a body cached by
+// an older build — a different response shape under the same operation — can
+// never be served after a deploy that changes the shape. Bump it whenever a
+// feed's body changes; the worst case of a bump is one cache miss per key.
+const updatesFeedShapeVersion = "v2"
+
 func updatesFeedCacheKey(mediaType string, startDate time.Time, page, limit int, extended string) string {
 	date := startDate.Format("2006-01-02")
 	if extended != "" {
-		return fmt.Sprintf("updates:%s:%s:page%d:limit%d:extended%s", mediaType, date, page, limit, extended)
+		return fmt.Sprintf("updates:%s:%s:%s:page%d:limit%d:extended%s", mediaType, updatesFeedShapeVersion, date, page, limit, extended)
 	}
-	return fmt.Sprintf("updates:%s:%s:page%d:limit%d", mediaType, date, page, limit)
+	return fmt.Sprintf("updates:%s:%s:%s:page%d:limit%d", mediaType, updatesFeedShapeVersion, date, page, limit)
 }
 
 // updatesGetCache returns a cached envelope on a hit; (zero, false) on miss or

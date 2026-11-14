@@ -42,7 +42,7 @@ func registerOpenAPIRoutes() {
 		// Likes
 		{Method: "GET", Path: "/v1/lists/{id}/likes", Summary: "Get who liked a list", Tags: []string{"Lists"}, Auth: "optional", StatusCodes: map[int]string{200: "Likes", 404: "Not found"}},
 		{Method: "POST", Path: "/v1/lists/{id}/like", Summary: "Like a list", Tags: []string{"Lists"}, Auth: "required", StatusCodes: map[int]string{200: "Liked", 401: "Unauthorized", 404: "Not found"}},
-		{Method: "DELETE", Path: "/v1/lists/{id}/like", Summary: "Unlike a list", Tags: []string{"Lists"}, Auth: "required", StatusCodes: map[int]string{200: "Unliked", 401: "Unauthorized", 404: "Not found"}},
+		{Method: "DELETE", Path: "/v1/lists/{id}/like", Summary: "Unlike a list", Tags: []string{"Lists"}, Auth: "required", StatusCodes: map[int]string{204: "Unliked", 401: "Unauthorized", 404: "Not found"}},
 		// Comments
 		{Method: "GET", Path: "/v1/lists/{id}/comments", Summary: "Get list comments", Tags: []string{"Lists"}, Auth: "optional", StatusCodes: map[int]string{200: "Comments", 404: "Not found"}},
 		// Popular / Trending
@@ -997,34 +997,6 @@ func handleLikeList(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"liked": true})
-}
-
-func handleUnlikeList(c *fiber.Ctx) error {
-	uid := userID(c)
-
-	idParam := c.Params("id")
-	listID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		return response.BadRequest(c, "invalid list id")
-	}
-
-	err = cache.WithCacheTransaction(func(tx *gorm.DB) (*cache.CacheTransaction, error) {
-		cacheTx := cache.NewCacheTransaction()
-
-		res := tx.Where("list_id = ? AND user_id = ?", listID, uid).Delete(&database.ListLike{})
-		if res.RowsAffected > 0 {
-			if err := tx.Model(&database.List{}).Where("id = ?", listID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error; err != nil {
-				return nil, err
-			}
-			bumpListVersion(cacheTx, listID)
-		}
-		return cacheTx, nil
-	})
-	if err != nil {
-		return response.InternalError(c)
-	}
-
-	return c.JSON(fiber.Map{"liked": false})
 }
 
 // ============================================================================
