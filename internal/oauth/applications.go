@@ -51,8 +51,17 @@ func handleListApplications(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database unavailable")
 	}
 
+	// "Authorised", not "created": a third-party client is registered by one
+	// account and authorised by many, and the person who approved it needs to
+	// see it — and be able to revoke it — whether or not they wrote the
+	// registration.
 	var clients []database.OAuthClient
-	if err := db.Where("user_id = ?", userID).Order("created_at DESC").Find(&clients).Error; err != nil {
+	listErr := db.Where(
+		"user_id = ? OR id IN (?)",
+		userID,
+		db.Model(&database.OAuthToken{}).Select("client_id").Where("user_id = ?", userID),
+	).Order("created_at DESC").Find(&clients).Error
+	if listErr != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to list applications")
 	}
 
@@ -71,7 +80,8 @@ func handleListApplications(c *fiber.Ctx) error {
 		// The newest live token describes the connection: which scopes were
 		// granted and when it was last in use.
 		var token database.OAuthToken
-		err := db.Where("client_id = ? AND revoked = false AND expires_at > ?", client.ID, time.Now()).
+		err := db.Where("client_id = ? AND user_id = ? AND revoked = false AND expires_at > ?",
+			client.ID, userID, time.Now()).
 			Order("created_at DESC").First(&token).Error
 		if err == nil {
 			view.Scopes = []string(token.Scopes)
@@ -79,7 +89,8 @@ func handleListApplications(c *fiber.Ctx) error {
 			view.AccessExpires = token.ExpiresAt.UTC().Format(time.RFC3339)
 			var active int64
 			if err := db.Model(&database.OAuthToken{}).
-				Where("client_id = ? AND revoked = false AND expires_at > ?", client.ID, time.Now()).
+				Where("client_id = ? AND user_id = ? AND revoked = false AND expires_at > ?",
+					client.ID, userID, time.Now()).
 				Count(&active).Error; err == nil {
 				view.ActiveTokens = int(active)
 			}
@@ -119,9 +130,16 @@ func handleDeleteApplication(c *fiber.Ctx) error {
 		}
 		return fiber.NewError(fiber.StatusInternalServerError, "database error")
 	}
-	// Someone else's application is not the caller's to delete, and the answer
-	// does not reveal that it exists.
+	// The registrant may delete the application outright. Anyone else who only
+	// authorised it gets their own tokens revoked and the client left standing —
+	// otherwise one user could delete an application that other accounts are
+	// still connected to.
 	if client.UserID != userID {
+		if err := db.Model(&database.OAuthToken{}).
+			Where("client_id = ? AND user_id = ? AND revoked = false", client.ID, userID).
+			Update("revoked", true).Error; err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to revoke token")
+		}
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 

@@ -13,8 +13,9 @@ import (
 
 // Context key constants — these are the contract for other packages reading auth state.
 const (
-	ctxUserID     = "user_id"
-	ctxAuthMethod = "auth_method"
+	ctxUserID      = "user_id"
+	ctxAuthMethod  = "auth_method"
+	ctxOAuthScopes = "oauth_scopes"
 )
 
 // AuthRequired is a Fiber middleware that requires a valid auth token.
@@ -75,9 +76,9 @@ func AttemptAuth(c *fiber.Ctx) (string, bool) {
 // escalate and nothing to leak.
 func RequireSessionCredential() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if method, _ := c.Locals(ctxAuthMethod).(string); method == "apikey" {
+		if method, _ := c.Locals(ctxAuthMethod).(string); method == "apikey" || method == "oauth" {
 			return writeError(c, fiber.StatusForbidden, "forbidden",
-				"an API key cannot manage API keys; sign in with a session")
+				"an API key or OAuth token cannot manage API keys; sign in with a session")
 		}
 		return c.Next()
 	}
@@ -138,11 +139,12 @@ func extractAuth(c *fiber.Ctx) (string, string, error) {
 		// OAuth access token — an opaque row issued by /oauth/token. Until this
 		// case existed a token could be minted and then be unusable: it matched
 		// no prefix, so every call with one was rejected.
-		userID, err := verifyOAuthToken(token)
+		userID, scopes, err := verifyOAuthToken(token)
 		if err != nil {
 			slog.Debug("oauth token verification failed", "path", c.Path(), "error", err)
 			return "", "", errInvalidToken
 		}
+		c.Locals(ctxOAuthScopes, scopes)
 		return userID, "oauth", nil
 	case strings.HasPrefix(token, SessionTokenPrefix):
 		// Local session path — an opaque server-side session row (issue #53).
@@ -165,17 +167,17 @@ const OAuthTokenPrefix = "hoa_"
 //
 // The token is matched by hash against oauth_tokens, so a revoked or expired
 // row stops working the moment it is marked — no separate cache to invalidate.
-func verifyOAuthToken(token string) (string, error) {
+func verifyOAuthToken(token string) (string, []string, error) {
 	db, err := database.GetDB()
 	if err != nil {
-		return "", errInvalidToken
+		return "", nil, errInvalidToken
 	}
 	sum := sha256.Sum256([]byte(token))
 	resolved, err := database.ResolveOAuthAccessToken(db, hex.EncodeToString(sum[:]))
-	if err != nil {
-		return "", errInvalidToken
+	if err != nil || resolved == nil {
+		return "", nil, errInvalidToken
 	}
-	return resolved.UserID, nil
+	return resolved.UserID, resolved.Scopes, nil
 }
 
 // verifyLocalSession resolves an opaque local session token to its user id.

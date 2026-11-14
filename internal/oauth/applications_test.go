@@ -402,3 +402,122 @@ func TestUserCodeHalvesAreIndependent(t *testing.T) {
 		t.Fatalf("only %d distinct codes in 200 draws", len(seen))
 	}
 }
+
+// TestOAuthTokenIsLimitedToItsScopes is the finding behind the guard: a token
+// granted only "profile" must not be able to write history, and the refusal
+// names the scope it would have needed.
+func TestOAuthTokenIsLimitedToItsScopes(t *testing.T) {
+	db := setupOAuthDB(t)
+	now := time.Now().UTC()
+	if err := db.Create(&database.User{
+		ID: "local_me", Username: "me", Email: "me@example.test", Status: "active",
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	access := accessTokenPrefix + "scoped"
+	if err := db.Create(&database.OAuthToken{
+		ID:        "token-scoped",
+		ClientID:  "11111111-1111-1111-1111-111111111111",
+		UserID:    "local_me",
+		TokenHash: hashToken(access),
+		Scopes:    database.TextArray{"profile"},
+		ExpiresAt: now.Add(time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	app := fiber.New()
+	api := app.Group("/v1", auth.OAuthScopeGuard())
+	api.Get("/users/me", auth.AuthRequired(), func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusOK)
+	})
+	api.Post("/sync/history", auth.AuthRequired(), func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusCreated)
+	})
+
+	do := func(method, path string) int {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Authorization", "Bearer "+access)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if status := do(http.MethodGet, "/v1/users/me"); status != http.StatusOK {
+		t.Fatalf("profile read = %d, want 200 (the token holds profile)", status)
+	}
+	if status := do(http.MethodPost, "/v1/sync/history"); status != http.StatusForbidden {
+		t.Fatalf("history write = %d, want 403 (the token holds only profile)", status)
+	}
+}
+
+// TestOAuthTokenWithWriteScopeMayWrite is the other half: the guard must not
+// block a token that does hold the scope.
+func TestOAuthTokenWithWriteScopeMayWrite(t *testing.T) {
+	db := setupOAuthDB(t)
+	now := time.Now().UTC()
+	if err := db.Create(&database.User{
+		ID: "local_me", Username: "me", Email: "me@example.test", Status: "active",
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	access := accessTokenPrefix + "writer"
+	if err := db.Create(&database.OAuthToken{
+		ID:        "token-writer",
+		ClientID:  "11111111-1111-1111-1111-111111111111",
+		UserID:    "local_me",
+		TokenHash: hashToken(access),
+		Scopes:    database.TextArray{"history:write"},
+		ExpiresAt: now.Add(time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	app := fiber.New()
+	api := app.Group("/v1", auth.OAuthScopeGuard())
+	api.Get("/sync/history", auth.AuthRequired(), func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusOK)
+	})
+
+	// A write scope implies its read counterpart, which is what the consent
+	// page advertises.
+	req := httptest.NewRequest(http.MethodGet, "/v1/sync/history", nil)
+	req.Header.Set("Authorization", "Bearer "+access)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("history read = %d, want 200 for a history:write token", resp.StatusCode)
+	}
+}
+
+// TestSessionCredentialRejectsOAuthTokens covers the escalation: minting API
+// keys is a session-only surface, and an OAuth token is not a session.
+func TestSessionCredentialRejectsOAuthTokens(t *testing.T) {
+	app := fiber.New()
+	app.Post("/v1/users/me/api-keys",
+		func(c *fiber.Ctx) error {
+			c.Locals("user_id", "local_me")
+			c.Locals("auth_method", "oauth")
+			return c.Next()
+		},
+		auth.RequireSessionCredential(),
+		func(c *fiber.Ctx) error { return c.SendStatus(http.StatusCreated) },
+	)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/v1/users/me/api-keys", nil))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 — an OAuth token must not mint API keys", resp.StatusCode)
+	}
+}

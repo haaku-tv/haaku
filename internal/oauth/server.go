@@ -88,7 +88,7 @@ func registerOpenAPIRoutes() {
 		{Method: "GET", Path: "/oauth/authorize", Summary: "OAuth2 authorization endpoint (authorization code + PKCE)", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{302: "Redirect with authorization code", 400: "Invalid parameters"}},
 		{Method: "POST", Path: "/oauth/token", Summary: "OAuth2 token endpoint", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token response", 400: "Invalid grant"}},
 		{Method: "POST", Path: "/oauth/revoke", Summary: "Revoke an OAuth2 token", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token revoked", 400: "Invalid request"}},
-		{Method: "POST", Path: "/oauth/revoke/token", Summary: "Revoke one of the caller's own OAuth2 tokens by id", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{200: "Token revoked", 401: "Unauthorized"}},
+		{Method: "POST", Path: "/oauth/revoke/token", Summary: "Revoke one of the caller's own OAuth2 tokens by id", Tags: []string{"OAuth"}, Auth: "required", RequestBody: revokeByIDRequest{}, StatusCodes: map[int]string{200: "Token revoked", 401: "Unauthorized"}},
 		{Method: "POST", Path: "/oauth/device/code", Summary: "Device flow — generate user & device codes", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Device code response", 400: "Invalid request"}},
 		{Method: "POST", Path: "/oauth/device/token", Summary: "Device flow — poll for access token", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token response", 400: "authorization_pending"}},
 	}
@@ -99,7 +99,7 @@ func registerOpenAPIRoutes() {
 
 // RegisterRoutes wires all OAuth route handlers at the app level.
 func RegisterRoutes(app *fiber.App) {
-	oauthGroup := app.Group("/oauth")
+	oauthGroup := app.Group("/oauth", auth.OAuthScopeGuard())
 	oauthGroup.Get("/applications", auth.AuthRequired(), handleListApplications)
 	oauthGroup.Post("/applications", handleCreateApplication)
 	oauthGroup.Delete("/applications/:id", auth.AuthRequired(), handleDeleteApplication)
@@ -297,6 +297,19 @@ func handleAuthorize(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "database error")
 	}
 
+	// The redirect URI is checked BEFORE consent: the refusal path sends the
+	// browser to it, so an unregistered URI must never get that far.
+	registered := false
+	for _, uri := range client.RedirectURIs {
+		if uri == redirectURI {
+			registered = true
+			break
+		}
+	}
+	if !registered {
+		return oauthBadRequest(c, "redirect_uri does not match a registered URI")
+	}
+
 	// Consent first: nothing is issued until the owner has seen what is being
 	// asked for and said yes.
 	if handled, err := consentGate(c, client, authorizeRequest{
@@ -318,7 +331,10 @@ func handleAuthorize(c *fiber.Ctx) error {
 		return oauthBadRequest(c, "redirect_uri not registered for this client")
 	}
 
-	scopes := validateScopes(strings.Fields(scope))
+	// Same parser as the consent page. Splitting the two let a scope string
+	// carrying a newline show "profile" on the page and grant
+	// "profile\nhistory:write" to the client.
+	scopes := validateScopes(parseScopeList(scope))
 
 	code, err := generateToken(32)
 	if err != nil {
@@ -657,7 +673,7 @@ func handleDeviceCode(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate user code")
 	}
 
-	scopes := validateScopes(strings.Fields(req.Scope))
+	scopes := validateScopes(parseScopeList(req.Scope))
 
 	grant := &deviceGrant{
 		ClientID:   req.ClientID,

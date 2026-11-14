@@ -455,6 +455,12 @@ paths:
     /oauth/revoke/token:
         post:
             operationId: _oauth_revoke_token_POST
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            tokenid: ""
+                required: true
             responses:
                 "200":
                     description: Token revoked

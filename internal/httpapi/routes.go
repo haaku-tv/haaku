@@ -51,6 +51,11 @@ import (
 func RegisterRoutes(app *fiber.App) {
 	api := app.Group("/v1")
 
+	// OAuth tokens carry scopes; this is the only place they are enforced.
+	// Everything below inherits it, so a route added later is covered without
+	// anyone remembering to add a permission call.
+	api.Use(auth.OAuthScopeGuard())
+
 	// Parity stubs FIRST, on the app root rather than the /v1 group: the
 	// generated routes already carry the /v1 prefix (scripts/parity-stubs.py
 	// mounts from the contract path), so registering them on the group produced

@@ -51,7 +51,11 @@ function IntegrationsPage() {
   const queryClient = useQueryClient()
   const [revokeId, setRevokeId] = useState<string | null>(null)
 
-  const { data: applications, isLoading } = useQuery({
+  const {
+    data: applications,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['oauth', 'applications'],
     queryFn: async (): Promise<OAuthApplication[]> => {
       if (!api) return []
@@ -98,7 +102,15 @@ function IntegrationsPage() {
         It will need to be authorised again to reconnect.
       </Banner>
 
-      {isLoading ? null : apps.length === 0 ? (
+      {isError ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-sm text-sf-ink-muted">
+              Could not load your applications. Try again in a moment.
+            </p>
+          </CardContent>
+        </Card>
+      ) : isLoading ? null : apps.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <Puzzle className="mx-auto size-8 text-sf-ink-hint" />
