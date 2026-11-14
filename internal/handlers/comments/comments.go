@@ -424,7 +424,7 @@ func handleCreateReply(c *fiber.Ctx) error {
 			return nil, fmt.Errorf("increment parent reply_count: %w", err)
 		}
 		resultReply = &reply
-		bumpCommentTarget(cacheTx, &parent)
+		bumpCommentWrite(cacheTx, &parent, &reply)
 		return cacheTx, nil
 	})
 	if err != nil {

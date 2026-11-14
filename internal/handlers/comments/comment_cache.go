@@ -43,3 +43,17 @@ func bumpCommentTarget(cacheTx *cache.CacheTransaction, comment *database.Commen
 		})
 	}
 }
+
+// bumpCommentWrite queues what one comment write invalidates: the media/list
+// the comment hangs on and the AUTHOR's user version (bumpCommentTarget does
+// both), plus — when the write is a reply — the parent comment's own targets.
+// The reply's author is a different account from the parent's, so without the
+// second target only the parent's cached stats would miss and the replier's
+// comment count would stay stale until some unrelated write moved their
+// version. nil is tolerated on either side.
+func bumpCommentWrite(cacheTx *cache.CacheTransaction, comment, reply *database.Comment) {
+	bumpCommentTarget(cacheTx, comment)
+	if reply != nil {
+		bumpCommentTarget(cacheTx, reply)
+	}
+}

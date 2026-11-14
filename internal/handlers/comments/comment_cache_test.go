@@ -44,3 +44,29 @@ func TestBumpCommentTargetIgnoresNil(t *testing.T) {
 		t.Fatalf("bumpCommentTarget(nil) queued %v, want nothing", keys)
 	}
 }
+
+// A reply is authored by someone other than the parent's author, so the write
+// has to invalidate BOTH accounts' stats: the replier's comment count changed,
+// and the parent's cached response embeds the reply/comment counters too.
+func TestBumpCommentWriteInvalidatesBothAuthors(t *testing.T) {
+	mediaID := int64(7)
+	parent := &database.Comment{ID: 1, UserID: "parent-author", MediaType: "movie", MediaID: &mediaID}
+	reply := &database.Comment{ID: 2, UserID: "replier", ParentID: &parent.ID, MediaType: "movie", MediaID: &mediaID}
+
+	tx := cache.NewCacheTransaction()
+	bumpCommentWrite(tx, parent, reply)
+
+	keys := tx.QueuedInvalidationKeys()
+	for _, want := range []string{redis.BuildUserVersionKey("parent-author"), redis.BuildUserVersionKey("replier")} {
+		found := false
+		for _, key := range keys {
+			if key == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("bumpCommentWrite queued %v; %q is missing, so that account's cached stats cannot see the reply", keys, want)
+		}
+	}
+}
