@@ -5912,7 +5912,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get user statistics (plays, minutes, unique media counts, ratings) */
+        /** Get user statistics (per-type plays, watched, minutes, collected, ratings and comments) */
         get: operations["_v1_users_id_stats_GET"];
         put?: never;
         post?: never;
@@ -38675,7 +38675,68 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        episodes: {
+                            collected: number;
+                            comments: number;
+                            minutes: number;
+                            plays: number;
+                            ratings: number;
+                            watched: number;
+                        };
+                        movies: {
+                            collected: number;
+                            comments: number;
+                            minutes: number;
+                            plays: number;
+                            ratings: number;
+                            watched: number;
+                        };
+                        network: {
+                            followers: number;
+                            following: number;
+                            friends: number;
+                        };
+                        ratings: {
+                            distribution: {
+                                /** Format: float */
+                                1: number;
+                                /** Format: float */
+                                2: number;
+                                /** Format: float */
+                                3: number;
+                                /** Format: float */
+                                4: number;
+                                /** Format: float */
+                                5: number;
+                                /** Format: float */
+                                6: number;
+                                /** Format: float */
+                                7: number;
+                                /** Format: float */
+                                8: number;
+                                /** Format: float */
+                                9: number;
+                                /** Format: float */
+                                10: number;
+                            };
+                            total: number;
+                        };
+                        seasons: {
+                            comments: number;
+                            ratings: number;
+                        };
+                        shows: {
+                            collected: number;
+                            comments: number;
+                            ratings: number;
+                            watched: number;
+                        };
+                        total_minutes?: number;
+                        total_plays?: number;
+                    };
+                };
             };
             /** @description invalid request */
             400: {
