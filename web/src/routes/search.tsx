@@ -63,6 +63,11 @@ function SearchPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const genre = searchParams.genre ?? ''
+  // The debounced navigation below fires up to 300ms after the keystroke that
+  // scheduled it. Reading the genre from the closure would restore the genre
+  // that was selected when the reader typed, undoing a genre they picked since.
+  const latest = useRef({ genre: '', type: searchParams.type })
+  latest.current = { genre, type: searchParams.type }
   const hasQuery = Boolean(searchParams.q && searchParams.q.length > 0)
   const activeQuery =
     hasQuery || genre
@@ -75,9 +80,31 @@ function SearchPage() {
         }
       : null
 
-  const { data: genreOptions } = useGenres(
-    searchParams.type === 'show' ? 'shows' : 'movies'
-  )
+  // Both vocabularies are read once and merged. An unset type searches movies
+  // AND shows, so a genre that only shows carry would otherwise be missing from
+  // the list until the reader picked "TV Shows" first.
+  const { data: movieGenres } = useGenres('movies')
+  const { data: showGenres } = useGenres('shows')
+  const genreOptions = useMemo(() => {
+    const source =
+      searchParams.type === 'show'
+        ? (showGenres ?? [])
+        : searchParams.type === 'movie'
+          ? (movieGenres ?? [])
+          : [...(movieGenres ?? []), ...(showGenres ?? [])]
+    const bySlug = new Map<string, { name: string; slug: string }>()
+    for (const option of source) {
+      if (!bySlug.has(option.slug)) bySlug.set(option.slug, option)
+    }
+    return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [movieGenres, showGenres, searchParams.type])
+
+  // Only movies and shows carry genres: an episode, person or list search
+  // cannot be narrowed by one, so the control is not offered for those types.
+  const genreSupported =
+    !searchParams.type ||
+    searchParams.type === 'movie' ||
+    searchParams.type === 'show'
 
   const { data, isLoading, isError, refetch } = useSearchQuery(activeQuery)
 
@@ -92,15 +119,15 @@ function SearchPage() {
           to: '/search',
           search: {
             q: val || undefined,
-            type: searchParams.type,
-            genre: genre || undefined,
+            type: latest.current.type,
+            genre: latest.current.genre || undefined,
             page: 1,
           },
           replace: true,
         })
       }, 300)
     },
-    [navigate, searchParams.type, genre]
+    [navigate]
   )
 
   const handleClear = useCallback(() => {
@@ -110,12 +137,14 @@ function SearchPage() {
 
   const handleTypeChange = useCallback(
     (type: SearchType | undefined) => {
+      const next = type === searchParams.type ? undefined : type
+      const keepsGenre = !next || next === 'movie' || next === 'show'
       navigate({
         to: '/search',
         search: {
           q: searchParams.q || undefined,
-          type: type === searchParams.type ? undefined : type,
-          genre: genre || undefined,
+          type: next,
+          genre: keepsGenre ? genre || undefined : undefined,
           page: 1,
         },
         replace: true,
@@ -189,20 +218,23 @@ function SearchPage() {
         ))}
 
         {/* The genre filter is a filter, not a suggestion: choosing one narrows
-            the titles by their own genres and works with an empty search box. */}
-        <Select value={genre || 'all'} onValueChange={handleGenreChange}>
-          <SelectTrigger className="ml-auto w-40">
-            <SelectValue placeholder="All genres" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All genres</SelectItem>
-            {(genreOptions ?? []).map((option) => (
-              <SelectItem key={option.slug} value={option.name}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            the titles by their own genres and works with an empty search box.
+            It is only offered where it can answer — movies and shows. */}
+        {genreSupported && (
+          <Select value={genre || 'all'} onValueChange={handleGenreChange}>
+            <SelectTrigger className="ml-auto w-40">
+              <SelectValue placeholder="All genres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All genres</SelectItem>
+              {genreOptions.map((option) => (
+                <SelectItem key={option.slug} value={option.name}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Section>
