@@ -183,7 +183,7 @@ func handleGetListsContaining(c *fiber.Ctx) error {
 		return response.Unauthorized(c)
 	}
 
-	mediaType, mediaID, err := listMembershipTarget(c)
+	mediaType, mediaID, err := parseMembershipTarget(c)
 	if err != nil {
 		return err
 	}

@@ -166,9 +166,9 @@ func contractListObjects(db *gorm.DB, lists []database.List) ([]map[string]any, 
 	return out, nil
 }
 
-// listMembershipAnswers validates the (type, media_id) pair the media page asks
-// "which of my lists hold this?" with.
-func listMembershipTarget(c *fiber.Ctx) (string, int64, error) {
+// parseMembershipTarget validates the (type, media_id) pair the media page asks
+// "which of my lists hold this?" with, writing the 400 itself.
+func parseMembershipTarget(c *fiber.Ctx) (string, int64, error) {
 	mediaType := c.Query("type")
 	if _, ok := contractMediaTable[mediaType]; !ok {
 		_ = response.BadRequest(c, "type must be one of movie, show, season, episode")
