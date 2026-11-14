@@ -265,6 +265,13 @@ func handleGenres(c *fiber.Ctx) error {
 		return c.JSON(items)
 	}
 
+	// The catalogue answers first: every ingested row carries its genres, so a
+	// self-hosted instance with no metadata token still has a usable genre
+	// list. The provider fills in only when the catalogue is empty.
+	if catalogue := catalogueGenres(refType); len(catalogue) > 0 {
+		return c.JSON(catalogue)
+	}
+
 	client, err := getTMDBClient()
 	if err != nil {
 		return response.WriteError(c, fiber.StatusServiceUnavailable, "tmdb_unavailable", "TMDB client unavailable")
@@ -575,4 +582,40 @@ func serveCertificationCatalog(c *fiber.Ctx, mediaType string) error {
 	}
 	setCache(c, key, catalog)
 	return c.JSON(catalog)
+}
+
+// catalogueGenres returns the distinct genre names this instance already holds
+// for a media kind, sorted, in the reference endpoint's shape.
+//
+// It reads the jsonb column through jsonb_array_elements_text, which is the one
+// expression both the ingest shape and the query agree on; a row with no genres
+// simply contributes nothing.
+func catalogueGenres(refType string) []GenreItem {
+	db, err := database.GetDB()
+	if err != nil || db == nil {
+		return nil
+	}
+	table := "movies"
+	if refType == "shows" {
+		table = "shows"
+	}
+	dialect := db.Dialector
+	if dialect == nil || dialect.Name() != "postgres" {
+		return nil
+	}
+	var names []string
+	query := "SELECT DISTINCT jsonb_array_elements_text(genres) AS name FROM " +
+		table + " WHERE jsonb_typeof(genres) = 'array' ORDER BY name"
+	if err := db.Raw(query).Scan(&names).Error; err != nil {
+		log.Printf("[reference] catalogue genres/%s error: %v", refType, err)
+		return nil
+	}
+	items := make([]GenreItem, 0, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		items = append(items, GenreItem{Name: name, Slug: slugify(name)})
+	}
+	return items
 }

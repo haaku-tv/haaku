@@ -31,10 +31,17 @@ var validExactTypes = map[string]bool{
 }
 
 // parseSearchParams extracts and validates common search query parameters.
+//
+// A query is not required when a genre is given: choosing a genre with the
+// search box empty is a browse ("Drama movies"), and the catalogue can answer
+// it from the rows it holds.
 func parseSearchParams(c *fiber.Ctx) (database.SearchParams, error) {
 	query := strings.TrimSpace(c.Query("query"))
-	if query == "" {
-		return database.SearchParams{}, fiber.NewError(fiber.StatusBadRequest, "query parameter is required")
+	// Every repeated `genre` counts: Fiber's Query returns only the first value,
+	// so `?genre=Drama&genre=Comedy` silently dropped the second filter.
+	genres := parseRepeatedCSV(c, "genre")
+	if query == "" && len(genres) == 0 {
+		return database.SearchParams{}, fiber.NewError(fiber.StatusBadRequest, "query or genre parameter is required")
 	}
 
 	typeStr := c.Query("type", "movie,show")
@@ -65,6 +72,7 @@ func parseSearchParams(c *fiber.Ctx) (database.SearchParams, error) {
 		Page:   page,
 		Limit:  limit,
 		Fields: fields,
+		Genres: genres,
 	}, nil
 }
 
@@ -85,6 +93,23 @@ func parseTypeList(s string) []string {
 }
 
 // parseCSV splits a comma-separated string, trimming whitespace from each part.
+// parseRepeatedCSV reads every value of a repeatable query parameter and splits
+// each on commas, so both `?genre=a,b` and `?genre=a&genre=b` work.
+func parseRepeatedCSV(c *fiber.Ctx, key string) []string {
+	var result []string
+	seen := make(map[string]struct{}, 4)
+	for _, raw := range c.Context().QueryArgs().PeekMulti(key) {
+		for _, part := range parseCSV(string(raw)) {
+			if _, dup := seen[part]; dup {
+				continue
+			}
+			seen[part] = struct{}{}
+			result = append(result, part)
+		}
+	}
+	return result
+}
+
 func parseCSV(s string) []string {
 	var result []string
 	for _, part := range strings.Split(s, ",") {
@@ -126,7 +151,11 @@ func handleSearch(c *fiber.Ctx) error {
 	items := catalogSearchItems(local.Results)
 	total := local.TotalItems
 
-	if providerTypes, ok := metadata.NormalizeMediaTypes(params.Types); ok {
+	// The provider cannot filter by genre and its hits carry no genre data, so a
+	// genre-filtered search answers from the catalogue alone. Otherwise
+	// `query=Probe&genre=Comedy` would list provider titles that are not Comedy
+	// and count them in the total.
+	if providerTypes, ok := metadata.NormalizeMediaTypes(params.Types); ok && len(params.Genres) == 0 {
 		if resolver, resolverErr := metadataResolver(); resolverErr != nil {
 			slog.Debug("[search] metadata provider unavailable, answering from the catalogue only", "error", resolverErr)
 		} else if hits, providerTotal, providerErr := resolver.SearchProvider(c.UserContext(), params.Query, providerTypes, params.Page, params.Limit); providerErr != nil {

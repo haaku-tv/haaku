@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -28,6 +29,9 @@ type SearchParams struct {
 	Page   int
 	Limit  int
 	Fields []string
+	// Genres narrows the result to rows whose genres include every name here.
+	// A search with genres and no text is a browse, and is served by popularity.
+	Genres []string
 }
 
 // SearchResponse is the paginated search response envelope.
@@ -66,11 +70,7 @@ func SearchMovies(db *gorm.DB, params SearchParams) ([]Movie, int64, error) {
 	var movies []Movie
 	var total int64
 
-	whereClause, rankClause := tsQuerySQL(params.Query)
-
-	query := db.Model(&Movie{}).
-		Where(whereClause).
-		Order("ts_rank(search_vector, " + rankClause + ") DESC")
+	query := narrowSearch(db.Model(&Movie{}), params)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count movies: %w", err)
@@ -89,11 +89,7 @@ func SearchShows(db *gorm.DB, params SearchParams) ([]Show, int64, error) {
 	var shows []Show
 	var total int64
 
-	whereClause, rankClause := tsQuerySQL(params.Query)
-
-	query := db.Model(&Show{}).
-		Where(whereClause).
-		Order("ts_rank(search_vector, " + rankClause + ") DESC")
+	query := narrowSearch(db.Model(&Show{}), params)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count shows: %w", err)
@@ -193,6 +189,9 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 		Page:   1,
 		Limit:  windowSize,
 		Fields: params.Fields,
+		// Genres ride with the window so the per-type searches filter in SQL
+		// instead of the rows being fetched and discarded here.
+		Genres: params.Genres,
 	}
 
 	for _, typ := range params.Types {
@@ -272,6 +271,52 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 		Limit:      limit,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// narrowSearch applies a search's text and genre constraints to a media query.
+//
+// The text clause is the full-text index; when the caller sent no text it is
+// omitted rather than matched against an empty tsquery (which matches nothing),
+// so "genre only" is a browse in popularity order instead of an empty page.
+func narrowSearch(query *gorm.DB, params SearchParams) *gorm.DB {
+	if strings.TrimSpace(params.Query) != "" {
+		whereClause, rankClause := tsQuerySQL(params.Query)
+		query = query.Where(whereClause).
+			Order("ts_rank(search_vector, " + rankClause + ") DESC")
+	} else {
+		query = query.Order("popularity DESC")
+	}
+	return narrowByGenres(query, params.Genres)
+}
+
+// narrowByGenres keeps only rows whose genres array carries every requested
+// name.
+//
+// PostgreSQL answers from the jsonb column with a containment test. The handler
+// suites run on sqlite, where the same column is text, so the fallback matches
+// the serialised JSON instead of failing with "no such operator".
+func narrowByGenres(query *gorm.DB, genres []string) *gorm.DB {
+	if len(genres) == 0 {
+		return query
+	}
+	dialect := query.Dialector
+	postgres := dialect != nil && dialect.Name() == "postgres"
+	for _, genre := range genres {
+		genre = strings.TrimSpace(genre)
+		if genre == "" {
+			continue
+		}
+		if postgres {
+			encoded, err := json.Marshal([]string{genre})
+			if err != nil {
+				continue
+			}
+			query = query.Where("genres @> ?::jsonb", string(encoded))
+			continue
+		}
+		query = query.Where("genres LIKE ?", "%\""+genre+"\"%")
+	}
+	return query
 }
 
 // SearchExact performs an exact title match (case-insensitive) on movies or shows.

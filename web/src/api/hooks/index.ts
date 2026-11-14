@@ -4,6 +4,7 @@
 
 export * from './useCalendar'
 export * from './useEpisodes'
+export * from './useGenres'
 export * from './useMovies'
 export * from './useNotifications'
 export * from './usePeople'

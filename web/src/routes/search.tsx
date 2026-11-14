@@ -3,6 +3,7 @@ import { Film, Plus, Tv, User } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { useGenres } from '@/api/hooks/useGenres'
 import {
   useResolveMedia,
   useSearch as useSearchQuery,
@@ -16,6 +17,11 @@ import {
   PaginationControls,
   PosterCard,
   SearchBar,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   ShimmerText,
 } from '@/components/ui'
 import { activateOnKey } from '@/lib/a11y'
@@ -28,6 +34,9 @@ const searchSchema = z.object({
     .enum(['movie', 'show', 'episode', 'person', 'list'])
     .optional()
     .catch(undefined),
+  // genre is a filter on the titles' own genres, not text: choosing one with
+  // an empty search box browses that genre instead of searching for its name.
+  genre: z.string().optional().catch(''),
   page: z.number().optional().catch(1),
 })
 
@@ -53,15 +62,49 @@ function SearchPage() {
   const [inputValue, setInputValue] = useState(searchParams.q ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+  const genre = searchParams.genre ?? ''
+  // The debounced navigation below fires up to 300ms after the keystroke that
+  // scheduled it. Reading the genre from the closure would restore the genre
+  // that was selected when the reader typed, undoing a genre they picked since.
+  const latest = useRef({ genre: '', type: searchParams.type })
+  latest.current = { genre, type: searchParams.type }
+  const hasQuery = Boolean(searchParams.q && searchParams.q.length > 0)
   const activeQuery =
-    searchParams.q && searchParams.q.length > 0
+    hasQuery || genre
       ? {
-          q: searchParams.q,
+          q: searchParams.q ?? '',
           type: searchParams.type,
+          genre: genre || undefined,
           page: searchParams.page ?? 1,
           limit: 20,
         }
       : null
+
+  // Both vocabularies are read once and merged. An unset type searches movies
+  // AND shows, so a genre that only shows carry would otherwise be missing from
+  // the list until the reader picked "TV Shows" first.
+  const { data: movieGenres } = useGenres('movies')
+  const { data: showGenres } = useGenres('shows')
+  const genreOptions = useMemo(() => {
+    const source =
+      searchParams.type === 'show'
+        ? (showGenres ?? [])
+        : searchParams.type === 'movie'
+          ? (movieGenres ?? [])
+          : [...(movieGenres ?? []), ...(showGenres ?? [])]
+    const bySlug = new Map<string, { name: string; slug: string }>()
+    for (const option of source) {
+      if (!bySlug.has(option.slug)) bySlug.set(option.slug, option)
+    }
+    return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [movieGenres, showGenres, searchParams.type])
+
+  // Only movies and shows carry genres: an episode, person or list search
+  // cannot be narrowed by one, so the control is not offered for those types.
+  const genreSupported =
+    !searchParams.type ||
+    searchParams.type === 'movie' ||
+    searchParams.type === 'show'
 
   const { data, isLoading, isError, refetch } = useSearchQuery(activeQuery)
 
@@ -74,12 +117,17 @@ function SearchPage() {
       debounceRef.current = setTimeout(() => {
         navigate({
           to: '/search',
-          search: { q: val || undefined, type: searchParams.type, page: 1 },
+          search: {
+            q: val || undefined,
+            type: latest.current.type,
+            genre: latest.current.genre || undefined,
+            page: 1,
+          },
           replace: true,
         })
       }, 300)
     },
-    [navigate, searchParams.type]
+    [navigate]
   )
 
   const handleClear = useCallback(() => {
@@ -89,11 +137,30 @@ function SearchPage() {
 
   const handleTypeChange = useCallback(
     (type: SearchType | undefined) => {
+      const next = type === searchParams.type ? undefined : type
+      const keepsGenre = !next || next === 'movie' || next === 'show'
       navigate({
         to: '/search',
         search: {
           q: searchParams.q || undefined,
-          type: type === searchParams.type ? undefined : type,
+          type: next,
+          genre: keepsGenre ? genre || undefined : undefined,
+          page: 1,
+        },
+        replace: true,
+      })
+    },
+    [navigate, searchParams.q, searchParams.type, genre]
+  )
+
+  const handleGenreChange = useCallback(
+    (value: string) => {
+      navigate({
+        to: '/search',
+        search: {
+          q: searchParams.q || undefined,
+          type: searchParams.type,
+          genre: value === 'all' ? undefined : value,
           page: 1,
         },
         replace: true,
@@ -106,12 +173,17 @@ function SearchPage() {
     (page: number) => {
       navigate({
         to: '/search',
-        search: { q: searchParams.q, type: searchParams.type, page },
+        search: {
+          q: searchParams.q,
+          type: searchParams.type,
+          genre: genre || undefined,
+          page,
+        },
         replace: true,
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
-    [navigate, searchParams.q, searchParams.type]
+    [navigate, searchParams.q, searchParams.type, genre]
   )
 
   useEffect(() => {
@@ -144,6 +216,25 @@ function SearchPage() {
             {f.label}
           </FilterPill>
         ))}
+
+        {/* The genre filter is a filter, not a suggestion: choosing one narrows
+            the titles by their own genres and works with an empty search box.
+            It is only offered where it can answer — movies and shows. */}
+        {genreSupported && (
+          <Select value={genre || 'all'} onValueChange={handleGenreChange}>
+            <SelectTrigger className="ml-auto w-40">
+              <SelectValue placeholder="All genres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All genres</SelectItem>
+              {genreOptions.map((option) => (
+                <SelectItem key={option.slug} value={option.name}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Section>
@@ -168,40 +259,33 @@ function SearchPage() {
           !isError &&
           data &&
           data.data.length === 0 &&
-          searchParams.q && (
+          (hasQuery || genre) && (
             <div className="flex flex-col items-center gap-4 py-16 text-center">
               <p className="text-lg font-semibold text-sf-ink">
-                No results for &ldquo;{searchParams.q}&rdquo;
+                {hasQuery
+                  ? `No results for “${searchParams.q}”`
+                  : `Nothing in ${genre} yet`}
               </p>
               <p className="text-sf-ink-muted">
                 Try a different search term or adjust filters.
               </p>
-              <div className="mt-2 flex flex-wrap justify-center gap-2">
-                {['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi'].map((g) => (
-                  <FilterPill
-                    key={g}
-                    onClick={() => {
-                      navigate({
-                        to: '/search',
-                        search: { q: g, type: 'movie' as SearchType, page: 1 },
-                      })
-                    }}
-                  >
-                    {g}
-                  </FilterPill>
-                ))}
-              </div>
+              {genre && (
+                <p className="text-sm text-sf-ink-faint">
+                  Filtered by {genre} — clear the genre filter to widen the
+                  search.
+                </p>
+              )}
             </div>
           )}
 
-        {!isLoading && !isError && !searchParams.q && (
+        {!isLoading && !isError && !hasQuery && !genre && (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="text-lg font-semibold text-sf-ink">
               Discover something new
             </p>
             <p className="text-sf-ink-muted">
-              Search for your favorite movies, shows, episodes, people, or
-              lists.
+              Search for a title, or pick a genre to browse what this instance
+              holds.
             </p>
           </div>
         )}
