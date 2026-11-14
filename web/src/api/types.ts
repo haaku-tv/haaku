@@ -154,6 +154,8 @@ export interface Season {
 export interface Person {
   name: string
   ids: Ids
+  /** What the person is known for, when the search row carries it. */
+  known_for?: string
   biography?: string
   birthday?: string
   death?: string

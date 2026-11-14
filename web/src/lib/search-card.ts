@@ -24,9 +24,10 @@ export interface CardModel {
 
 /** personMeta is the line under a person's name: what they are known for. */
 function personMeta(person: Person): string | undefined {
-  const knownFor = (person as Person & { known_for_department?: string })
-    .known_for_department
-  return knownFor || undefined
+  // `/v1/search` serialises the field as `known_for`; reading a provider-shaped
+  // `known_for_department` off the row found nothing and left every person card
+  // without its second line.
+  return person.known_for || undefined
 }
 
 export function cardOf(result: SearchResult): CardModel | null {
