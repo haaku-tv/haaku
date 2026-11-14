@@ -1,4 +1,6 @@
 import type { PropsWithChildren } from 'react'
+import * as React from 'react'
+import { useRailWheel } from '@/lib/rail-wheel'
 import { cn } from '@/lib/utils'
 
 /**
@@ -62,15 +64,22 @@ export function PosterGrid({
 
 /**
  * Horizontal scrollable row.
+ *
+ * The wheel handler is what keeps the PAGE scrollable: without it a vertical
+ * wheel over a row scrolls the row sideways and the page never moves (see
+ * `lib/rail-wheel.ts`).
  */
 export function ScrollRow({
   children,
   className,
 }: PropsWithChildren<{ className?: string }>) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  useRailWheel(ref)
   return (
     <div
+      ref={ref}
       className={cn(
-        'flex gap-3 overflow-x-auto pb-2 scrollbar-hide',
+        'flex gap-3 overflow-x-auto overflow-y-hidden pb-2 scrollbar-hide',
         className
       )}
     >

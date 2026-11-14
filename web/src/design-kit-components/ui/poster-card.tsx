@@ -18,6 +18,9 @@ export type PosterCardProps = Omit<
   fallback?: React.ReactNode
 }
 
+/** Degrees of rotation at the edge of the card: ±4° at the corners. */
+const TILT_RANGE = 8
+
 export function PosterCard({
   title,
   meta,
@@ -32,14 +35,45 @@ export function PosterCard({
 }: PosterCardProps) {
   const [tilt, setTilt] = React.useState({ x: 0, y: 0 })
 
-  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const px = (e.clientX - rect.left) / rect.width
-    const py = (e.clientY - rect.top) / rect.height
-    setTilt({ y: (px - 0.5) * 8, x: (0.5 - py) * 8 })
+  // The pointer position is measured against the box captured on ENTER, never
+  // against the element's live rect: that element carries the rotation this
+  // state drives, so `getBoundingClientRect()` returns a box that grows as the
+  // card turns, feeding the next pointer sample a different fraction — a
+  // feedback loop between a transform and the measurement of the same element.
+  // Capturing once (while the card is untransformed) breaks it, so the effect
+  // is bounded no matter how long the pointer moves across the card.
+  const rectRef = React.useRef<DOMRect | null>(null)
+  const stillRef = React.useRef(false)
+  React.useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!query) return
+    stillRef.current = query.matches
+    const onChange = (event: MediaQueryListEvent) => {
+      stillRef.current = event.matches
+      if (event.matches) setTilt({ x: 0, y: 0 })
+    }
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+
+  const handleEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    rectRef.current = e.currentTarget.getBoundingClientRect()
   }
 
-  const handleLeave = () => setTilt({ x: 0, y: 0 })
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = rectRef.current
+    if (stillRef.current || !rect || rect.width === 0 || rect.height === 0)
+      return
+    const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1)
+    const px = clamp01((e.clientX - rect.left) / rect.width)
+    const py = clamp01((e.clientY - rect.top) / rect.height)
+    setTilt({ y: (px - 0.5) * TILT_RANGE, x: (0.5 - py) * TILT_RANGE })
+  }
+
+  const handleLeave = () => {
+    rectRef.current = null
+    setTilt({ x: 0, y: 0 })
+  }
 
   return (
     <motion.div
@@ -52,6 +86,7 @@ export function PosterCard({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: cursor tilt is decorative, no keyboard interaction needed */}
       <div
         data-rail-card
+        onMouseEnter={handleEnter}
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
         className={cn('group relative w-full', className)}
