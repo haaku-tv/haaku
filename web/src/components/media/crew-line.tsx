@@ -27,11 +27,20 @@ export function CrewLine({
   leadJobs = ['Director'],
 }: CrewLineProps) {
   const leadJob = leadJobs.find((job) => crew.some((c) => c.job === job))
+  // Label by the job that matched, not by the caller's preferred job: a show
+  // with credits but no Creator falls back to Director, and calling that
+  // "Created by" credits the wrong people.
+  const matchedLabel =
+    leadJob === 'Director'
+      ? 'Directed by'
+      : leadJob === 'Creator'
+        ? 'Created by'
+        : leadLabel
   const leads = pick(crew, leadJob ? [leadJob] : [], 2)
   const writers = pick(crew, ['Writer', 'Screenplay'], 2)
 
   const parts: { label?: string; people: { name: string; id: number }[] }[] = []
-  if (leads.length > 0) parts.push({ label: leadLabel, people: leads })
+  if (leads.length > 0) parts.push({ label: matchedLabel, people: leads })
   if (writers.length > 0) parts.push({ label: 'Written by', people: writers })
 
   const hasPeople = parts.length > 0

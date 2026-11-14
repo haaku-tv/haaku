@@ -53,6 +53,11 @@ export function MediaActions({
   const [favorite, setFavorite] = useState<boolean | null>(null)
   const [rating, setRating] = useState<number | null>(null)
 
+  // An override is a claim about a write that has not landed yet. When the
+  // write fails there is nothing to override any more, so it is dropped and the
+  // authoritative account state is shown again — otherwise one failed request
+  // leaves the button claiming a state the account does not have, and the next
+  // click sends the opposite mutation to the wrong title.
   const isWatched = watched ?? state.watched
   const isWatchlisted = watchlisted ?? state.watchlisted
   const isFavorite = favorite ?? state.favorite
@@ -80,8 +85,10 @@ export function MediaActions({
         onClick={() => {
           const next = !isWatched
           setWatched(next)
-          if (next) addHistory.mutate(payload)
-          else removeHistory.mutate(payload)
+          if (next)
+            addHistory.mutate(payload, { onError: () => setWatched(null) })
+          else
+            removeHistory.mutate(payload, { onError: () => setWatched(null) })
         }}
       >
         {isWatched ? (
@@ -98,8 +105,14 @@ export function MediaActions({
         onClick={() => {
           const next = !isWatchlisted
           setWatchlisted(next)
-          if (next) addWatchlist.mutate(payload)
-          else removeWatchlist.mutate(payload)
+          if (next)
+            addWatchlist.mutate(payload, {
+              onError: () => setWatchlisted(null),
+            })
+          else
+            removeWatchlist.mutate(payload, {
+              onError: () => setWatchlisted(null),
+            })
         }}
         title={isWatchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
       >
@@ -117,8 +130,10 @@ export function MediaActions({
         onClick={() => {
           const next = !isFavorite
           setFavorite(next)
-          if (next) addFavorite.mutate(payload)
-          else removeFavorite.mutate(payload)
+          if (next)
+            addFavorite.mutate(payload, { onError: () => setFavorite(null) })
+          else
+            removeFavorite.mutate(payload, { onError: () => setFavorite(null) })
         }}
         title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
       >
@@ -138,11 +153,14 @@ export function MediaActions({
             type="button"
             onClick={() => {
               setRating(score)
-              addRating.mutate({
-                [kind === 'movie' ? 'movies' : 'shows']: [
-                  { ids, rating: score },
-                ],
-              })
+              addRating.mutate(
+                {
+                  [kind === 'movie' ? 'movies' : 'shows']: [
+                    { ids, rating: score },
+                  ],
+                },
+                { onError: () => setRating(null) }
+              )
             }}
             aria-label={`Rate ${score} out of 10`}
             className="cursor-pointer p-0.5 transition-transform hover:scale-110"

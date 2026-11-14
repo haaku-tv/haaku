@@ -705,8 +705,10 @@ func getExtended(c *fiber.Ctx) string { return GetExtended(c) }
 // client that forgets renders a header with half its fields missing. List
 // routes keep the minimal default; they serve many rows and a card needs little.
 func detailExtended(c *fiber.Ctx) string {
-	if extended := getExtended(c); extended != "min" {
-		return extended
+	// An omitted parameter means "whatever the route prefers"; an explicit
+	// `extended=min` is a request for the narrow shape and must be honoured.
+	if c.Query("extended") == "" {
+		return "full"
 	}
-	return "full"
+	return getExtended(c)
 }

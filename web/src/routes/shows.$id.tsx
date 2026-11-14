@@ -47,7 +47,14 @@ function ShowDetailPage() {
   const { data: stats } = useShowStats(id)
   const { data: seasons } = useShowSeasons(id)
   const { data: recommendations } = useShowRecommendations(id)
-  const [season, setSeason] = useState<number | null>(null)
+  // The season is stored with the show it belongs to: the route component
+  // survives a change of `id`, so a bare number would carry season 3 of the
+  // previous show into one that only has one season.
+  const [selection, setSelection] = useState<{
+    showID: string
+    season: number
+  } | null>(null)
+  const season = selection?.showID === id ? selection.season : null
 
   const ordered = useMemo(
     () => [...(seasons ?? [])].sort((a, b) => a.number - b.number),
@@ -59,8 +66,8 @@ function ShowDetailPage() {
   // after they picked another.
   useEffect(() => {
     if (season !== null || ordered.length === 0) return
-    setSeason(ordered[0].number)
-  }, [season, ordered])
+    setSelection({ showID: id, season: ordered[0].number })
+  }, [id, season, ordered])
 
   const { data: episodes, isLoading: episodesLoading } = useShowSeasonEpisodes(
     id,
@@ -146,7 +153,12 @@ function ShowDetailPage() {
           />
         }
         actions={
-          <MediaActions kind="show" ids={show.ids} trailer={show.trailer} />
+          <MediaActions
+            key={rowID}
+            kind="show"
+            ids={show.ids}
+            trailer={show.trailer}
+          />
         }
       />
 
@@ -160,7 +172,7 @@ function ShowDetailPage() {
             <SeasonRail
               seasons={ordered}
               active={season ?? undefined}
-              onSelect={setSeason}
+              onSelect={(next) => setSelection({ showID: id, season: next })}
               fallbackPoster={poster}
             />
           </Section>

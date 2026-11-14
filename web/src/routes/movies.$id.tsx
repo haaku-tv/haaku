@@ -106,7 +106,12 @@ function MovieDetailPage() {
         overview={movie.overview}
         crewLine={<CrewLine crew={crew} genres={movie.genres} />}
         actions={
-          <MediaActions kind="movie" ids={movie.ids} trailer={movie.trailer} />
+          <MediaActions
+            key={rowID}
+            kind="movie"
+            ids={movie.ids}
+            trailer={movie.trailer}
+          />
         }
       />
 
