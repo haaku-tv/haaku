@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import * as React from 'react'
+import { useRailWheel } from '../../lib/rail-wheel'
 import { cn } from '../../lib/utils'
 import { SectionHead } from './section-head'
 
@@ -26,6 +27,7 @@ export function Rail({
   controls = 'floating',
 }: RailProps) {
   const ref = React.useRef<HTMLDivElement>(null)
+  useRailWheel(ref)
 
   const scroll = (dir: 1 | -1) => {
     const el = ref.current
