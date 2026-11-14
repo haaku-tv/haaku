@@ -120,6 +120,15 @@ func TestUnlikeListReportsAFailedDelete(t *testing.T) {
 	if err := db.Migrator().DropTable(&database.ListLike{}); err != nil {
 		t.Fatalf("drop list_likes: %v", err)
 	}
+	// Restore the table whatever happens: contractTestDB hands back a shared
+	// PostgreSQL handle when DATABASE_URL is set, and its earlier AutoMigrate is
+	// skipped once `lists` exists, so a dropped table would poison every later
+	// list test in the same database.
+	t.Cleanup(func() {
+		if err := db.AutoMigrate(&database.ListLike{}); err != nil {
+			t.Errorf("restore list_likes: %v", err)
+		}
+	})
 
 	app := fiber.New()
 	v1 := app.Group("/v1")
