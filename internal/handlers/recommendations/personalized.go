@@ -72,11 +72,15 @@ func recommendationsFor(c *fiber.Ctx, db *gorm.DB, userID, kind string, limit in
 		return engineItems, personalised, nil
 	}
 
-	var seen map[int64]struct{}
-	if ids, seenErr := recommend.SeenIDs(db, userID, kind); seenErr == nil {
-		seen = ids
-	} else {
-		slog.Debug("[recommend] could not read the seen set", "kind", kind, "error", seenErr)
+	seen, seenErr := recommend.SeenIDs(db, userID, kind)
+	if seenErr != nil {
+		// Without the exclusion set, a provider pick could name something the
+		// account already watched or dismissed. The engine's answer applied the
+		// exclusions successfully, so it is the safe answer to fall back to —
+		// merging unchecked provider ids is not.
+		slog.Debug("[recommend] could not read the seen set; keeping the catalogue answer",
+			"kind", kind, "error", seenErr)
+		return engineItems, personalised, nil
 	}
 
 	items := make([]recommend.Item, 0, limit)
