@@ -7,7 +7,6 @@ import (
 	"github.com/haaku-tv/haaku/internal/auth"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/handlers/comments"
-	"github.com/haaku-tv/haaku/internal/handlers/media"
 	"github.com/haaku-tv/haaku/internal/handlers/notes"
 	"github.com/haaku-tv/haaku/internal/handlers/sync"
 	"github.com/haaku-tv/haaku/internal/openapi"
@@ -257,24 +256,13 @@ func handleUserHistoryItem(c *fiber.Ctx) error {
 		return response.BadRequest(c, "invalid media type")
 	}
 
-	resolvedType, mediaID, resolveErr := media.ResolveID(c, c.Params("media_id"))
-	if resolveErr != nil {
-		return resolveErr
-	}
-	if resolvedType == "" {
-		// media.ResolveID writes its own error envelope and returns a nil
-		// error after doing so (e.g. unknown external id → 404). Nothing
-		// left to send.
-		return nil
-	}
-	if resolvedType != mt {
-		return response.BadRequest(c, "media_type does not match the resolved media id")
+	mediaID, err := sync.ResolveHistoryItemID(c, mt, c.Params("media_id"))
+	if err != nil {
+		return err
 	}
 
-	var rows []database.UserHistory
-	if err := db.Where("user_id = ? AND media_type = ? AND media_id = ?", target.ID, mt, mediaID).
-		Order("watched_at DESC, id DESC").
-		Find(&rows).Error; err != nil {
+	rows, err := sync.HistoryRowsForItem(db, target.ID, mt, mediaID)
+	if err != nil {
 		return response.InternalError(c)
 	}
 

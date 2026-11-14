@@ -359,7 +359,7 @@ sections:
   - trakt: GET /sync/history/{type}/{id}
     ours: GET /v1/sync/history/{media_type}/{media_id}
     status: implemented
-    rationale: 'Served at the contract path shape: the single-item read returns the caller''s rows with the contract''s id, watched_at, action and type fields.'
+    rationale: 'Served at the contract path shape: the single-item read answers the caller''s hydrated history items (the row''s id, watched_at, action and type plus the nested movie/episode/show/season object with its ids block), and the path''s media type is authoritative — episodes and seasons are addressed by their local episodes.id / seasons.id, which is what user_history stores (issues #160, #96).'
   - trakt: GET /sync/collection/{type}
     ours: GET /v1/sync/collection/{type}
     status: implemented

@@ -137,36 +137,6 @@ func handleGetHistory(c *fiber.Ctx) error {
 	return writeItems(c, results, err, page, limit, total)
 }
 
-// handleGetHistoryItem returns history for a specific media item.
-func handleGetHistoryItem(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-
-	mt := normalizeHistoryType(c.Params("media_type"))
-	mediaParam := c.Params("media_id")
-
-	resolvedMT, mediaID, err := media.ResolveID(c, mediaParam)
-	if err != nil {
-		return err
-	}
-	if resolvedMT != mt {
-		return response.BadRequest(c, "media_type does not match the resolved media id")
-	}
-
-	db, dbErr := database.GetDB()
-	if dbErr != nil {
-		return response.InternalError(c)
-	}
-
-	var items []database.UserHistory
-	if err := db.Where("user_id = ? AND media_type = ? AND media_id = ?", userID, mt, mediaID).
-		Order("watched_at DESC").
-		Find(&items).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	return c.JSON(contractHistoryItems(items))
-}
-
 // historyAddRequest is the body for POST /v1/sync/history.
 type historyAddRequest struct {
 	Movies   []historyMovie   `json:"movies,omitempty"`

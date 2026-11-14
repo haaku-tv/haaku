@@ -97,6 +97,49 @@ Handler tests: `per_type_reads_test.go` (sqlite in-memory, real PostgreSQL when
 fixtures, `[]`-not-null for an empty account, pagination, path-wins-over-`?type=`,
 and a table check that no unbacked `(collection, media_type)` pair is declared.
 
+## Single-item history read (`GET /v1/sync/history/<type>/<id>`)
+
+One item's watch history, addressed by the media type in the path. Two things
+were wrong with it until #160/#96, and both are fixed here:
+
+**Shape — it serves a hydrated item, not the stored row.** The read answers the
+same item shape every other history read answers (`buildHistoryItems`): the row
+envelope (`id`, `watched_at`, `action`, `type`, plus our own `media_type` /
+`media_id` / `source` / `season_id` / `episode_id`) with the media object nested
+under `movie` / `episode` (+ its parent `show`) / `season`, carrying title,
+images and the `ids` block a client echoes back to a write. Serving the row made
+the read useless for its own purpose — a client asks "have I watched this?" and
+got back only the ids it already had. The `ids` convention is the one #156/#161
+landed: `ids.trakt` is the LOCAL row id, which is also what the route addresses.
+
+**Addressing — the route's type is authoritative.** `media.ResolveID` is
+type-agnostic and knows movies, shows and people, so `media_id` values that
+`user_history` actually stores for episodes (`episodes.id`) and seasons
+(`seasons.id`) resolved to nothing (404) or to an unrelated movie/show sharing the
+number (400). `media.ResolveRouteID` is the same resolution without the response
+writes: the wanted type's table is read first, a row of another type is reported
+as a wrong-type answer, and the handler keeps this route's vocabulary — 400
+`media_type does not match the resolved media id`, 404 `media not found`.
+
+Row selection (`HistoryRowsForItem`, shared with `users.handleUserHistoryItem` so
+both surfaces answer the same rows for the same item):
+
+| `{type}` | rows served |
+|---|---|
+| `movies` | `media_type='movie' AND media_id=id` |
+| `episodes` | `media_type='episode' AND (media_id=id OR episode_id=id)` — both columns, so a row written either way is found |
+| `seasons` | the season's episode rows — `user_history` stores no season row |
+| `shows` | the show's episode rows — same reason |
+
+A `person` segment is a 400 `invalid media type`: no history row can carry one.
+
+The response is a bare array (the contract types it as one) and carries the
+`X-Pagination-*` headers with page 1 and the item's row count — the read returns
+the item's whole history, but a contract list without the pagination convention
+is graded a defect. Tests: `history_item_test.go` (hydration with `ids`,
+episode/season/show addressing, the 404/400 vocabulary) and
+`users/profile_history_item_test.go` for the profile surface.
+
 ## Completion
 
 | Piece | Status |
@@ -171,7 +214,7 @@ transaction) is the natural next step — none exists today.
   - `handleRemoveRatings` published `EventRatingAdded`, `handleRemoveFavorites` published `EventFavoriteAdded`, `handleReorderWatchlist` published `EventWatchlistAdded` (sync.go) — **fixed**: the webhook catalog (`haaku-plan/03-api/webhooks.md`) defines no rating/favorite removal or watchlist-reorder events, so these handlers now emit nothing.
 - **Hardcoded `0` in add responses (RESOLVED)** — `handleAddWatchlist` returned `"added":{"movies":0,"episodes":0}` instead of real counts; `handleAddFavorites` returned `"movies":0,"shows":0` with `added` unused; `handleAddRatings` lumped ALL adds into `"movies"`. Now all three track real per-type `added`/`duplicates` (`addedMovies/Shows`, `dupMovies/Shows`, `addedSeasons/Episodes`) and return them.
 - **No requireAuth middleware on routes (RESOLVED)** — `/sync` group now runs `auth.AuthRequired()` via `sync.Use`; per-handler `c.Locals("user_id")` checks dropped (Batch 1).
-- **`handleGetHistoryItem` never validated `media_type` (RESOLVED)** — the route param was used verbatim in the WHERE while `media.ResolveID` may resolve a different type; now the resolved type must match the param or the request returns 400.
+- **`handleGetHistoryItem` never validated `media_type` (RESOLVED)** — the route param was used verbatim in the WHERE while `media.ResolveID` may resolve a different type; now the resolved type must match the param or the request returns 400. The route is also **route-typed** since issue #96: `media.ResolveRouteID` resolves the id against the type the path names (movie/show by row or external id, episode by `episodes.id`, season by `seasons.id`), so an episode history row is reachable at `/sync/history/episodes/{episodes.id}` instead of 404/400. See "Single-item history read".
 - **`parseWatchedAt` silently fell back to `now` (RESOLVED)** — invalid/unknown timestamps became "now", silently corrupting watch history on client typos. Invalid RFC3339 strings now error and the offending item is reported under `not_found` with `"error": "invalid watched_at"` (batch keeps processing the rest). `"unknown"` semantics (aired_at vs now) still need a spec decision.
 - **`resolveByTMDB` bypasses `media.ResolveID`** — mutates the context (`c.Set("id_type", ...)`) and hand-rolls an `external_ids` lookup + `verifyMediaExists` per item; duplicates the resolver and does an extra query per item (N+1 on bulk adds).
 - **No advisory locks on rank assignment (RESOLVED)** — `handleAddWatchlist`/`handleAddFavorites` now take a per-user advisory lock (`pg_advisory_xact_lock(hashtext('watchlist'|'favorites'), hashtext(userID))`) before reading `MAX(rank)`, so concurrent adds can't produce duplicate ranks.
@@ -179,7 +222,7 @@ transaction) is the natural next step — none exists today.
 - **`sort_by=title` is wrong** — `order = "media_type, media_id"` (sync.go:781) sorts by type+id, not title; would need a join to media tables.
 - **`"unknown"` watched_at semantics undecided** — `"unknown"` in show/season expansion uses `now` rather than the episode `aired_at`; needs a spec decision (aired_at vs now).
 - **Bulk-add N+1** — per-item `findSeason`/`findEpisode` queries inside the transaction loop; fine for small batches, quadratic-ish for large syncs.
-- **No pagination on `handleGetHistoryItem`** — returns all history rows for one item.
+- **`handleGetHistoryItem` pages nothing (RESOLVED, as a convention)** — the read returns every row the item has (it is one item's whole history, so there is nothing to page), but it now carries the `X-Pagination-*` headers with page 1 and the item's row count: the contract types the response as a list and a Trakt client pages it, so a list without the headers is graded a defect by the conformance harness.
 - **Episode rating add/remove payload mismatch (RESOLVED, issue #25)** — `handleAddRatings` declared episodes as `{ids, rating}` (no season/number), so a Trakt episode payload had its `season`/`number` dropped by the decoder, the series TMDB id resolved to the *show*, and the rating was written against the whole series — while `handleRemoveRatings` correctly targeted the episode. Now the episodes payload uses a type carrying `season`/`number`, resolves series→season→episode and writes `media_type='episode'`; a reference without season/number is rejected with 400 `invalid_request` instead of falling back to the show. Regression test: `ratings_test.go` (seeds a series with two episodes, asserts the episode row is rated and the show is not, round-trips `/ratings/remove`, and asserts the 400).
 - **No episode support in watchlist/favorites** — Trakt allows episodes/seasons in the watchlist; only movies/shows are handled there. Note this is *symmetric* across add and remove, so it is a feature gap, not the ratings-style add/remove asymmetry. Collection now supports episodes and season/show expansion (issue #71); `/collection/episodes` is served by `collection.go`. **Read-side consequence (issue #4):** watchlist seasons/episodes and collection seasons are still not registered as pinned row variants — see "Per-type reads".
 - **Error helpers (`authRequired`/`badRequest`/`internalError`) duplicated** — "match project conventions" per comment, but the shared package exists.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/haaku-tv/haaku/internal/database"
+	"github.com/haaku-tv/haaku/internal/response"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/postgres"
@@ -55,6 +56,11 @@ func profileTestDB(t *testing.T) *gorm.DB {
 		&database.ListLike{},
 		&database.Movie{},
 		&database.Show{},
+		// Seasons and episodes are the local rows a history item route
+		// addresses (media_id is episodes.id / seasons.id) and the parent media
+		// an episode history item carries.
+		&database.Season{},
+		&database.Episode{},
 		&database.ExternalID{},
 	}
 	if onPostgres {
@@ -89,7 +95,7 @@ func profileTestDB(t *testing.T) *gorm.DB {
 	for _, table := range []string{
 		"users", "user_follows", "user_blocks", "user_history", "user_collection",
 		"user_watchlist", "user_ratings", "user_notes", "user_hidden", "comments", "comment_likes",
-		"lists", "list_likes", "scrobble_sessions", "external_ids", "movies", "shows",
+		"lists", "list_likes", "scrobble_sessions", "external_ids", "episodes", "seasons", "movies", "shows",
 	} {
 		if err := db.Exec("DELETE FROM " + table).Error; err != nil {
 			t.Fatalf("clear %s: %v", table, err)
@@ -102,7 +108,7 @@ func profileTestDB(t *testing.T) *gorm.DB {
 // newProfileReadApp mounts the public-profile read surface exactly as the
 // server does, with a stub auth middleware pinning callerID ("" = anonymous).
 func newProfileReadApp(callerID string) *fiber.App {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{ErrorHandler: response.HandleError})
 	v1 := app.Group("/v1")
 	v1.Use(func(c *fiber.Ctx) error {
 		if callerID != "" {
