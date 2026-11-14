@@ -36,6 +36,12 @@ func handleUnlikeList(c *fiber.Ctx) error {
 		cacheTx := cache.NewCacheTransaction()
 
 		res := tx.Where("list_id = ? AND user_id = ?", listID, uid).Delete(&database.ListLike{})
+		// A failed DELETE reports RowsAffected 0, which would otherwise be read
+		// as "there was no like" and answered 204 for a delete that never
+		// happened. Return the driver's error; the wrapper turns it into a 500.
+		if res.Error != nil {
+			return nil, res.Error
+		}
 		if res.RowsAffected > 0 {
 			// CASE rather than GREATEST: GREATEST is Postgres-only, so the
 			// sqlite handler suite could never execute this branch and the

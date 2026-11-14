@@ -108,3 +108,34 @@ func TestUnlikeListAnswers204AndDeletesTheLike(t *testing.T) {
 		t.Errorf("like_count = %d after a repeated unlike, want 1 (unchanged)", stored.LikeCount)
 	}
 }
+
+// TestUnlikeListReportsAFailedDelete is the other half of the 204: a DELETE
+// that fails at the driver reports RowsAffected 0, which must not be read as
+// "there was no like" — that would answer 204 for an unlike that never
+// happened, which is worse than the 200 the row used to serve.
+func TestUnlikeListReportsAFailedDelete(t *testing.T) {
+	db := contractTestDB(t)
+	seedContractUser(t, db, "owner")
+
+	if err := db.Migrator().DropTable(&database.ListLike{}); err != nil {
+		t.Fatalf("drop list_likes: %v", err)
+	}
+
+	app := fiber.New()
+	v1 := app.Group("/v1")
+	v1.Use(func(c *fiber.Ctx) error {
+		if u := c.Get("X-Test-User"); u != "" {
+			c.Locals("user_id", u)
+		}
+		return c.Next()
+	})
+	v1.Delete("/lists/:id/like", handleUnlikeList)
+
+	status, raw := contractDo(t, app, "owner", http.MethodDelete, "/v1/lists/1/like", nil)
+	if status == http.StatusNoContent {
+		t.Fatalf("DELETE with a failing store = 204 (%s); a delete that did not happen must not claim success", raw)
+	}
+	if status != http.StatusInternalServerError {
+		t.Fatalf("DELETE with a failing store = %d (%s), want 500", status, raw)
+	}
+}

@@ -26,8 +26,11 @@ func movieUpdatesTestDB(t *testing.T, updated time.Time) *gorm.DB {
 	}
 	if sqlDB, serr := db.DB(); serr == nil {
 		// One connection keeps the in-memory schema visible to the handler's
-		// own queries.
+		// own queries. Close it in cleanup: the named shared-memory database
+		// lives until its last connection closes, so without this a
+		// `-count=2` run reuses the first run's rows and the seed collides.
 		sqlDB.SetMaxOpenConns(1)
+		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	if err := db.AutoMigrate(&database.Movie{}, &database.ExternalID{}); err != nil {
 		t.Fatalf("migrate test DB: %v", err)
