@@ -130,7 +130,10 @@ func HistoryRowsForItem(db *gorm.DB, userID, kind string, id int64) ([]database.
 	case "episode":
 		q = q.Where("media_type = ? AND (media_id = ? OR episode_id = ?)", "episode", id, id)
 	case "season", "show":
-		episodeIDs := episodeIDsOf(db, kind, id)
+		episodeIDs, idErr := episodeIDsOf(db, kind, id)
+		if idErr != nil {
+			return nil, idErr
+		}
 		if len(episodeIDs) == 0 {
 			return []database.UserHistory{}, nil
 		}
@@ -151,7 +154,12 @@ func HistoryRowsForItem(db *gorm.DB, userID, kind string, id int64) ([]database.
 // episodeIDsOf returns the local episode ids a season or a show holds. A person
 // has no episodes, so it returns none — a person id is answerable as a
 // wrong-type answer by the resolver, not as a history read.
-func episodeIDsOf(db *gorm.DB, kind string, id int64) []int64 {
+//
+// The error is returned rather than swallowed: an empty id list means "this
+// season/show has no episodes stored", which the caller answers as an empty
+// history read, so a failed lookup would otherwise masquerade as an item with
+// no history instead of a database failure.
+func episodeIDsOf(db *gorm.DB, kind string, id int64) ([]int64, error) {
 	var ids []int64
 	column := ""
 	switch kind {
@@ -160,8 +168,10 @@ func episodeIDsOf(db *gorm.DB, kind string, id int64) []int64 {
 	case "show":
 		column = "show_id"
 	default:
-		return nil
+		return nil, nil
 	}
-	_ = db.Model(&database.Episode{}).Where(column+" = ?", id).Pluck("id", &ids).Error
-	return ids
+	if err := db.Model(&database.Episode{}).Where(column+" = ?", id).Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
 }

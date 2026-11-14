@@ -233,3 +233,24 @@ func TestHistoryItemKeepsTheRoutesErrorVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestHistoryRowsForItemSurfacesAFailedEpisodeLookup proves a database failure
+// while resolving a season's or a show's episodes is reported as an error, not
+// as an item with no history. Swallowing it made a broken read indistinguishable
+// from "nothing watched", which both surfaces answer as 200 with an empty array.
+func TestHistoryRowsForItemSurfacesAFailedEpisodeLookup(t *testing.T) {
+	db := setupHistoryItemDB(t)
+	if err := db.Migrator().DropTable(&database.Episode{}); err != nil {
+		t.Fatalf("drop episodes: %v", err)
+	}
+
+	for _, kind := range []string{"season", "show"} {
+		rows, err := HistoryRowsForItem(db, historyItemUser, kind, 11)
+		if err == nil {
+			t.Fatalf("HistoryRowsForItem(%s) = %d rows, nil error; a failed episode lookup must surface", kind, len(rows))
+		}
+		if rows != nil {
+			t.Fatalf("HistoryRowsForItem(%s) returned rows alongside an error: %v", kind, rows)
+		}
+	}
+}
