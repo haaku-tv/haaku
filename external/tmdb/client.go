@@ -507,3 +507,29 @@ func (c *Client) GetTVCertifications() (*CertificationsResponse, error) {
 	}
 	return decode[CertificationsResponse](resp)
 }
+
+// GetMovieRecommendations returns TMDB's own "recommended from this title" list
+// (v3 /movie/{id}/recommendations).
+//
+// This is the graph haaku leans on when an instance has no viewing history of
+// its own: the provider's related-title edges are the same ones a user would
+// see on TMDB, and the local catalogue engine then scores them against what the
+// instance actually holds.
+func (c *Client) GetMovieRecommendations(id, page int) (*Paginated[MovieListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doV3("GET", fmt.Sprintf("/movie/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[MovieListItem]](resp)
+}
+
+// GetShowRecommendations is GetMovieRecommendations for TV (/tv/{id}/recommendations).
+func (c *Client) GetShowRecommendations(id, page int) (*Paginated[TVListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doV3("GET", fmt.Sprintf("/tv/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[TVListItem]](resp)
+}

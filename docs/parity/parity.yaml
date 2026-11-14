@@ -116,9 +116,8 @@ sections:
     rationale: 'Trakt-ID-keyed update feed, landed with the rest of issue #4''s read work; same path and params.'
   - trakt: GET /movies/{id}/related
     ours: GET /v1/movies/{id}/related
-    status: blocked-engine
-    rationale: Needs the recommendation graph. Our own route GET /v1/movies/recommendations/{id} is the nearest surface but answers 501 not_implemented (its custom-surface row is in the last section), and Trakt's /movies/{id}/related is a distinct surface, so neither is parity here.
-    engine: 'recommendations engine (issue #49)'
+    status: implemented
+    rationale: 'Answered by the catalogue recommendations engine (internal/recommend): titles ranked by shared genres and shared lead cast/crew, then catalogue quality, drawn from the movies this instance already holds. No metadata token needed.'
   - trakt: GET /movies/{id}/releases/{country}
     status: implemented
     ours: GET /v1/movies/{id}/releases/{country}
@@ -189,9 +188,8 @@ sections:
     rationale: Trakt-ID-keyed update feed; same path and params.
   - trakt: GET /shows/{id}/related
     ours: GET /v1/shows/{id}/related
-    status: blocked-engine
-    rationale: Needs the recommendation graph; our own route GET /v1/shows/recommendations/{id} is the nearest surface but answers 501 not_implemented (see the custom-surface row in the last section).
-    engine: 'recommendations engine (issue #49)'
+    status: implemented
+    rationale: 'Answered by the catalogue recommendations engine (internal/recommend): shows ranked by shared genres and shared lead cast/crew, then catalogue quality, drawn from the shows this instance already holds.'
   - trakt: GET /shows/{id}/videos
     status: implemented
     ours: GET /v1/shows/{id}/videos
@@ -320,14 +318,12 @@ sections:
   rows:
   - trakt: DELETE /recommendations/movies/{id}
     ours: DELETE /v1/recommendations/movies/{id}
-    status: blocked-engine
-    rationale: Hiding a recommendation is a decision the recommendations engine does not model yet (the user_hidden table is not wired to it).
-    engine: 'recommendations engine (issue #49)'
+    status: implemented
+    rationale: Dismisses the title from the recommendations by writing a user_hidden row in the "recommendations" section, which the engine excludes from every answer. Idempotent; 204 on success.
   - trakt: DELETE /recommendations/shows/{id}
     ours: DELETE /v1/recommendations/shows/{id}
-    status: blocked-engine
-    rationale: 'Same as the movie dismissal: no per-item hide decision is modelled.'
-    engine: 'recommendations engine (issue #49)'
+    status: implemented
+    rationale: 'Same dismissal path as movies, stored against the show row in the "recommendations" section.'
 - name: Sync
   rows:
   - trakt: GET /sync/last_activities
@@ -589,14 +585,12 @@ sections:
     rationale: 'custom: the skipped (duplicate) items of a haaku sync session, now that the sync engine (issue #6) has landed and records per-item outcomes. Our own session concept, not a Trakt path.'
   - trakt: ''
     ours: GET /v1/movies/recommendations/{id}
-    status: blocked-engine
-    rationale: 'Custom 501: our own movie ''more like this'' route (Trakt''s nearest surface is /movies/{id}/related). Answers 501 not_implemented until the recommendations engine lands, so it is a stub, not parity. Recorded here so a 501 route cannot go unmeasured.'
-    engine: 'recommendations engine (issue #49)'
+    status: out-of-scope
+    rationale: 'custom: our own "more like this" route for movies, served by the catalogue engine behind Trakt''s /movies/{id}/related.'
   - trakt: ''
     ours: GET /v1/shows/recommendations/{id}
-    status: blocked-engine
-    rationale: 'Custom 501: our own show ''more like this'' route; answers 501 not_implemented until the recommendations engine lands. Recorded here so a 501 route cannot go unmeasured.'
-    engine: 'recommendations engine (issue #49)'
+    status: out-of-scope
+    rationale: 'custom: our own "more like this" route for shows, served by the catalogue engine behind Trakt''s /shows/{id}/related.'
   - trakt: ''
     ours: GET /v1/auth/config
     status: out-of-scope
@@ -911,13 +905,13 @@ sections:
     status: implemented
     rationale: Served at GET /v1/people/{id}/shows; the path shape matches the contract.
   - trakt: GET /recommendations/movies/
-    ours: ''
-    status: out-of-scope
-    rationale: 'deferred: the item-to-item recommendations engine tracked by #49'
+    ours: GET /v1/recommendations/movies
+    status: implemented
+    rationale: 'Personal recommendations from the catalogue engine: the account''s watchlist, history, favourites and ratings form a genre/people profile that ranks unseen titles. A new account gets the instance''s popular titles; the response reports which it got in `personalised`.'
   - trakt: GET /recommendations/shows/
-    ours: ''
-    status: out-of-scope
-    rationale: 'deferred: the item-to-item recommendations engine tracked by #49'
+    ours: GET /v1/recommendations/shows
+    status: implemented
+    rationale: 'The shows half of the same engine; episode history is resolved to its show so watching a show counts as taste for it.'
   - trakt: GET /search/{type}/exact
     ours: GET /v1/search/{type}/exact
     status: implemented

@@ -4,15 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/handlers/media"
+	"github.com/haaku-tv/haaku/internal/metadata"
 	"github.com/haaku-tv/haaku/internal/openapi"
+	"github.com/haaku-tv/haaku/internal/recommend"
 	projredis "github.com/haaku-tv/haaku/redis"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/haaku-tv/haaku/internal/response"
+	"gorm.io/gorm"
 )
 
 func init() {
@@ -25,12 +29,14 @@ func registerOpenAPIRoutes() {
 		// Movies discovery
 		{Method: "GET", Path: "/v1/movies/trending", Summary: "Get trending movies", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Trending movies"}},
 		{Method: "GET", Path: "/v1/movies/popular", Summary: "Get popular movies", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Popular movies"}},
-		{Method: "GET", Path: "/v1/movies/recommendations/{id}", Summary: "Get movie recommendations", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Recommendations", 501: "Not implemented (requires recommendations engine)"}},
+		{Method: "GET", Path: "/v1/movies/recommendations/{id}", Summary: "Get movies like this one", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Recommendations", 400: "Invalid id"}},
+		{Method: "GET", Path: "/v1/movies/{id}/related", Summary: "Get movies related to this one", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Related movies", 400: "Invalid id"}},
 
 		// Shows discovery
 		{Method: "GET", Path: "/v1/shows/trending", Summary: "Get trending shows", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Trending shows"}},
 		{Method: "GET", Path: "/v1/shows/popular", Summary: "Get popular shows", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Popular shows"}},
-		{Method: "GET", Path: "/v1/shows/recommendations/{id}", Summary: "Get show recommendations", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Recommendations", 501: "Not implemented (requires recommendations engine)"}},
+		{Method: "GET", Path: "/v1/shows/recommendations/{id}", Summary: "Get shows like this one", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Recommendations", 400: "Invalid id"}},
+		{Method: "GET", Path: "/v1/shows/{id}/related", Summary: "Get shows related to this one", Tags: []string{"Discovery"}, Auth: "none", StatusCodes: map[int]string{200: "Related shows", 400: "Invalid id"}},
 	}
 
 	for _, r := range routes {
@@ -44,11 +50,16 @@ func RegisterRoutes(api fiber.Router) {
 	api.Get("/movies/trending", handleMoviesTrending)
 	api.Get("/movies/popular", handleMoviesPopular)
 	api.Get("/movies/recommendations/:id", handleMoviesRecommendations)
+	// Trakt's own surface for the same question; registered after the
+	// recommendations path so the two static-ish segments cannot shadow each
+	// other.
+	api.Get("/movies/:id/related", handleMoviesRecommendations)
 
 	// --- Shows ---
 	api.Get("/shows/trending", handleShowsTrending)
 	api.Get("/shows/popular", handleShowsPopular)
 	api.Get("/shows/recommendations/:id", handleShowsRecommendations)
+	api.Get("/shows/:id/related", handleShowsRecommendations)
 
 	// Contract-shaped anticipated feeds — static "/anticipated" must precede
 	// media's parameterised /movies/:id and /shows/:id.
@@ -156,16 +167,158 @@ func showsList(c *fiber.Ctx, kind string) error {
 // ---------------------------------------------------------------------------
 
 func handleMoviesRecommendations(c *fiber.Ctx) error {
-	// Recommendations require the recommendation graph (issue #5), which has not
-	// landed. Fails closed with 501 rather than return a fabricated empty array
-	// with a 200 — a made-up payload is worse than an honest "not implemented".
-	return response.NotImplemented(c, "recommendations require the recommendations engine, which is not implemented")
+	return relatedMedia(c, "movie")
 }
 
 func handleShowsRecommendations(c *fiber.Ctx) error {
-	// Same blocker as movies: the recommendations engine has not landed. Fails
-	// closed with 501 rather than return a fabricated empty array.
-	return response.NotImplemented(c, "recommendations require the recommendations engine, which is not implemented")
+	return relatedMedia(c, "show")
+}
+
+// relatedItems answers "what else is like this title".
+//
+// The metadata provider leads when it is configured: TMDB's own related list is
+// the graph a single-user instance has no way to learn, and it is the same list
+// the title's TMDB page shows. The catalogue engine follows with what it can
+// score locally, and carries the whole answer when there is no token.
+func relatedItems(c *fiber.Ctx, db *gorm.DB, kind string, id int64, limit int) ([]recommend.Item, error) {
+	engineItems, err := recommend.Related(db, kind, id, limit*2)
+	if err != nil {
+		return nil, err
+	}
+
+	resolver := metadata.DefaultResolver()
+	if resolver == nil {
+		return trim(engineItems, limit), nil
+	}
+
+	var tmdbID int
+	table := "movies"
+	if kind == "show" {
+		table = "shows"
+	}
+	if err := db.Table(table).Select("tmdb_id").Where("id = ?", id).Scan(&tmdbID).Error; err != nil || tmdbID <= 0 {
+		return trim(engineItems, limit), nil
+	}
+
+	tmdbIDs, err := resolver.ProviderRecommendations(c.UserContext(), []metadata.RecommendationSeed{
+		{Kind: kind, TmdbID: tmdbID, Weight: 1},
+	}, limit*2)
+	if err != nil || len(tmdbIDs) == 0 {
+		return trim(engineItems, limit), nil
+	}
+
+	localIDs, err := resolver.LocalIDsForTmdb(c.UserContext(), kind, tmdbIDs)
+	if err != nil {
+		return trim(engineItems, limit), nil
+	}
+
+	items := make([]recommend.Item, 0, limit)
+	taken := make(map[int64]struct{}, limit)
+	taken[id] = struct{}{}
+	for _, localID := range localIDs {
+		if _, ok := taken[localID]; ok {
+			continue
+		}
+		taken[localID] = struct{}{}
+		items = append(items, recommend.Item{Kind: kind, ID: localID, Score: 1})
+		if len(items) == limit {
+			return items, nil
+		}
+	}
+	for _, item := range engineItems {
+		if _, ok := taken[item.ID]; ok {
+			continue
+		}
+		taken[item.ID] = struct{}{}
+		items = append(items, item)
+		if len(items) == limit {
+			break
+		}
+	}
+	return items, nil
+}
+
+func trim(items []recommend.Item, limit int) []recommend.Item {
+	if limit > 0 && len(items) > limit {
+		return items[:limit]
+	}
+	return items
+}
+
+// relatedMedia answers "what else is like this title" from the catalogue.
+//
+// The same ranking backs Trakt's /movies/{id}/related and our own
+// /movies/recommendations/{id}: they are the same question, and answering them
+// from one engine is what keeps the two surfaces consistent.
+func relatedMedia(c *fiber.Ctx, kind string) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.BadRequest(c, "id must be a positive integer")
+	}
+
+	db, dbErr := database.GetDB()
+	if dbErr != nil {
+		return response.InternalError(c)
+	}
+
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, convErr := strconv.Atoi(raw); convErr == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	items, err := relatedItems(c, db, kind, id, limit)
+	if err != nil {
+		return response.InternalError(c)
+	}
+
+	ids := make([]int64, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+
+	if kind == "show" {
+		var shows []database.Show
+		if len(ids) > 0 {
+			if err := db.Where("id IN ?", ids).Find(&shows).Error; err != nil {
+				return response.InternalError(c)
+			}
+		}
+		byID := make(map[int64]database.Show, len(shows))
+		for _, show := range shows {
+			byID[show.ID] = show
+		}
+		results := make([]media.ShowResponse, 0, len(shows))
+		for _, item := range items {
+			show, ok := byID[item.ID]
+			if !ok {
+				continue
+			}
+			results = append(results, media.BuildShowResponse(&show, "min"))
+		}
+		return c.JSON(results)
+	}
+
+	var movies []database.Movie
+	if len(ids) > 0 {
+		if err := db.Where("id IN ?", ids).Find(&movies).Error; err != nil {
+			return response.InternalError(c)
+		}
+	}
+	byID := make(map[int64]database.Movie, len(movies))
+	for _, movie := range movies {
+		byID[movie.ID] = movie
+	}
+	results := make([]media.MovieResponse, 0, len(movies))
+	for _, item := range items {
+		movie, ok := byID[item.ID]
+		if !ok {
+			continue
+		}
+		results = append(results, media.BuildMovieResponse(&movie, "min"))
+	}
+	return c.JSON(results)
 }
 
 // ---------------------------------------------------------------------------

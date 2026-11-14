@@ -38,7 +38,6 @@ func stubHandler(issue int, trakt, reason string) fiber.Handler {
 // skips a stub whose path a real handler already serves.
 func RegisterRoutes(api fiber.Router) {
 	w := newStubRouter(api)
-	registerStub49(w)
 	registerStub69(w)
 	registerStub105(w)
 	registerStub106(w)
@@ -47,7 +46,6 @@ func RegisterRoutes(api fiber.Router) {
 // routeDefs is every stub's registry entry, in a stable order.
 func routeDefs() []openapi.RouteDef {
 	var all []openapi.RouteDef
-	all = append(all, defsStub49()...)
 	all = append(all, defsStub69()...)
 	all = append(all, defsStub105()...)
 	all = append(all, defsStub106()...)

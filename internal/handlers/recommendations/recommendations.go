@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/haaku-tv/haaku/internal/auth"
 	"github.com/haaku-tv/haaku/internal/cache"
 	"github.com/haaku-tv/haaku/internal/database"
+	"github.com/haaku-tv/haaku/internal/metadata"
 	"github.com/haaku-tv/haaku/internal/openapi"
+	"github.com/haaku-tv/haaku/internal/recommend"
 	projredis "github.com/haaku-tv/haaku/redis"
 
 	"github.com/gofiber/fiber/v2"
@@ -35,6 +40,18 @@ func registerOpenAPIRoutes() {
 			Summary: "Get personalized show recommendations based on watch history",
 			Tags:    []string{"Recommendations"}, Auth: "required",
 			StatusCodes: map[int]string{200: "Show recommendations", 401: "Unauthorized"},
+		},
+		{
+			Method: "DELETE", Path: "/v1/recommendations/movies/{id}",
+			Summary: "Dismiss a movie from the recommendations",
+			Tags:    []string{"Recommendations"}, Auth: "required",
+			StatusCodes: map[int]string{204: "Dismissed", 400: "Invalid id", 401: "Unauthorized"},
+		},
+		{
+			Method: "DELETE", Path: "/v1/recommendations/shows/{id}",
+			Summary: "Dismiss a show from the recommendations",
+			Tags:    []string{"Recommendations"}, Auth: "required",
+			StatusCodes: map[int]string{204: "Dismissed", 400: "Invalid id", 401: "Unauthorized"},
 		},
 		// Social
 		{
@@ -67,6 +84,8 @@ func RegisterRoutes(api fiber.Router) {
 	recs := api.Group("/recommendations")
 	recs.Get("/movies", auth.AuthRequired(), handlePersonalizedMovies)
 	recs.Get("/shows", auth.AuthRequired(), handlePersonalizedShows)
+	recs.Delete("/movies/:id", auth.AuthRequired(), handleHideMovieRecommendation)
+	recs.Delete("/shows/:id", auth.AuthRequired(), handleHideShowRecommendation)
 
 	social := api.Group("/social_recommendations")
 	social.Get("/movies", auth.AuthRequired(), handleSocialMovies)
@@ -153,7 +172,30 @@ type anticipatedItem struct {
 // PERSONALIZED RECOMMENDATIONS
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Personalized recommendations
+// ---------------------------------------------------------------------------
+
+// handlePersonalizedMovies serves GET /v1/recommendations/movies.
 func handlePersonalizedMovies(c *fiber.Ctx) error {
+	return personalized(c, "movie")
+}
+
+// handlePersonalizedShows serves GET /v1/recommendations/shows.
+func handlePersonalizedShows(c *fiber.Ctx) error {
+	return personalized(c, "show")
+}
+
+// personalized ranks the catalogue for one account and one kind.
+//
+// The ranking itself lives in internal/recommend: it reads everything the
+// account has an opinion about (history, watchlist, favourites and ratings) and
+// scores the catalogue against it. This handler only does the HTTP shape — the
+// page window, the optional genre filter, and the envelope.
+//
+// A brand-new account gets the instance's popular titles instead of an empty
+// row, and the response says which of the two it got.
+func personalized(c *fiber.Ctx, kind string) error {
 	userID := c.Locals("user_id").(string)
 
 	db, err := database.GetDB()
@@ -164,51 +206,133 @@ func handlePersonalizedMovies(c *fiber.Ctx) error {
 	genreFilter := c.Query("genre", "")
 	page, limit := response.ParsePagination(c, 20)
 
-	// Step 1: Get user's top 5 genres from history + favorites + ratings.
-	topGenres, err := fetchTopGenresCached(db, userID, 5)
+	// The provider is the backbone: it knows which titles belong together even
+	// on a brand-new instance with one user, which is exactly the case a
+	// collaborative engine cannot serve. The catalogue engine then fills the row
+	// from this instance's own taste, and supplies everything when no token is
+	// configured.
+	items, personalised, err := recommendationsFor(c, db, userID, kind, page*limit)
 	if err != nil {
 		return response.InternalError(c)
 	}
 
-	if len(topGenres) == 0 {
+	ids := make([]int64, 0, len(items))
+	ranked := make(map[int64]int, len(items))
+	for index, item := range items {
+		ranked[item.ID] = index
+		ids = append(ids, item.ID)
+	}
+
+	if kind == "show" {
+		var shows []database.Show
+		if err := db.Where("id IN ?", ids).Find(&shows).Error; err != nil {
+			return response.InternalError(c)
+		}
 		return c.JSON(fiber.Map{
-			"items":     []recMovieItem{},
-			"page":      page,
-			"limit":     limit,
-			"row_count": 0,
+			"items":        buildShowItems(shows, ranked, genreFilter),
+			"page":         page,
+			"limit":        limit,
+			"row_count":    len(items),
+			"personalised": personalised,
 		})
 	}
 
-	// Step 2: Build query for unwatched movies in those genres.
-	var total int64
 	var movies []database.Movie
-
-	baseQuery := db.
-		Where("movies.genres ?| ?", topGenres).
-		Where("NOT EXISTS (SELECT 1 FROM user_history WHERE user_id = ? AND media_type = ? AND media_id = movies.id)", userID, "movie").
-		Where("NOT EXISTS (SELECT 1 FROM user_hidden WHERE user_id = ? AND media_type = ? AND media_id = movies.id)", userID, "movie")
-
-	if genreFilter != "" {
-		baseQuery = baseQuery.Where("movies.genres ? ?", genreFilter)
-	}
-
-	// Count total
-	if err := baseQuery.Distinct("movies.id").Count(&total).Error; err != nil {
+	if err := db.Where("id IN ?", ids).Find(&movies).Error; err != nil {
 		return response.InternalError(c)
 	}
 
-	// Fetch page
-	if err := baseQuery.
-		Select("DISTINCT movies.*").
-		Order("movies.popularity DESC").
-		Offset((page - 1) * limit).
-		Limit(limit).
-		Find(&movies).Error; err != nil {
-		return response.InternalError(c)
+	return c.JSON(fiber.Map{
+		"items":        buildMovieItems(movies, ranked, genreFilter),
+		"page":         page,
+		"limit":        limit,
+		"row_count":    len(items),
+		"personalised": personalised,
+	})
+}
+
+// recommendationsFor merges the provider backbone with the catalogue engine.
+//
+// Order matters: the provider's picks lead, because on an instance nobody has
+// watched anything yet they are the only real signal. The engine's own ranking
+// follows, minus anything already picked. An instance with no token gets the
+// engine alone, and an account with no history still gets the popular shelf.
+func recommendationsFor(c *fiber.Ctx, db *gorm.DB, userID, kind string, limit int) ([]recommend.Item, bool, error) {
+	engineItems, personalised, err := recommend.Personal(db, userID, kind, limit)
+	if err != nil {
+		return nil, false, err
 	}
 
-	results := make([]recMovieItem, 0, len(movies))
-	for _, m := range movies {
+	resolver := metadata.DefaultResolver()
+	if resolver == nil {
+		return engineItems, personalised, nil
+	}
+
+	seeds, err := recommend.Seeds(db, userID, kind, 5)
+	if err != nil || len(seeds) == 0 {
+		return engineItems, personalised, nil
+	}
+
+	providerSeeds := make([]metadata.RecommendationSeed, 0, len(seeds))
+	for _, seed := range seeds {
+		providerSeeds = append(providerSeeds, metadata.RecommendationSeed{
+			Kind: kind, TmdbID: seed.TmdbID, Weight: seed.Weight,
+		})
+	}
+
+	tmdbIDs, err := resolver.ProviderRecommendations(c.UserContext(), providerSeeds, limit*2)
+	if err != nil || len(tmdbIDs) == 0 {
+		return engineItems, personalised, nil
+	}
+
+	localIDs, err := resolver.LocalIDsForTmdb(c.UserContext(), kind, tmdbIDs)
+	if err != nil {
+		return engineItems, personalised, nil
+	}
+
+	seen, err := recommend.SeenIDs(db, userID, kind)
+	if err != nil {
+		return engineItems, personalised, nil
+	}
+
+	items := make([]recommend.Item, 0, limit)
+	taken := make(map[int64]struct{}, limit)
+	for _, id := range localIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		if _, ok := taken[id]; ok {
+			continue
+		}
+		taken[id] = struct{}{}
+		items = append(items, recommend.Item{Kind: kind, ID: id, Score: 1})
+		if len(items) == limit {
+			return items, true, nil
+		}
+	}
+
+	for _, item := range engineItems {
+		if _, ok := taken[item.ID]; ok {
+			continue
+		}
+		taken[item.ID] = struct{}{}
+		items = append(items, item)
+		if len(items) == limit {
+			break
+		}
+	}
+	return items, personalised || len(items) > 0, nil
+}
+
+// buildMovieItems renders the ranked movies in score order, dropping the ones a
+// genre filter excludes and the rows past the requested page.
+func buildMovieItems(rows []database.Movie, ranked map[int64]int, genreFilter string) []recMovieItem {
+	ordered := orderMovies(rows, ranked)
+	results := make([]recMovieItem, 0, len(ordered))
+	for _, m := range ordered {
+		if !matchesGenre(m.Genres, genreFilter) {
+			continue
+		}
 		results = append(results, recMovieItem{
 			ID:         m.ID,
 			TmdbID:     m.TmdbID,
@@ -222,77 +346,17 @@ func handlePersonalizedMovies(c *fiber.Ctx) error {
 			Poster:     m.Images.StringValue("poster"),
 		})
 	}
-	if results == nil {
-		results = make([]recMovieItem, 0)
-	}
-
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	return results
 }
 
-func handlePersonalizedShows(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-
-	db, err := database.GetDB()
-	if err != nil {
-		return response.InternalError(c)
-	}
-
-	genreFilter := c.Query("genre", "")
-	page, limit := response.ParsePagination(c, 20)
-
-	// Step 1: Get user's top 5 genres.
-	topGenres, err := fetchTopGenresCached(db, userID, 5)
-	if err != nil {
-		return response.InternalError(c)
-	}
-
-	if len(topGenres) == 0 {
-		return c.JSON(fiber.Map{
-			"items":     []recShowItem{},
-			"page":      page,
-			"limit":     limit,
-			"row_count": 0,
-		})
-	}
-
-	// Step 2: Build query for unwatched shows in those genres.
-	// "Unwatched" = no episode history for this show.
-	var total int64
-	var shows []database.Show
-
-	baseQuery := db.
-		Where("shows.genres ?| ?", topGenres).
-		Where(`NOT EXISTS (
-			SELECT 1 FROM user_history uh
-			JOIN episodes e ON uh.media_id = e.id
-			WHERE uh.user_id = ? AND uh.media_type = 'episode' AND e.show_id = shows.id
-		)`, userID).
-		Where("NOT EXISTS (SELECT 1 FROM user_hidden WHERE user_id = ? AND media_type = ? AND media_id = shows.id)", userID, "show")
-
-	if genreFilter != "" {
-		baseQuery = baseQuery.Where("shows.genres ? ?", genreFilter)
-	}
-
-	if err := baseQuery.Distinct("shows.id").Count(&total).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	if err := baseQuery.
-		Select("DISTINCT shows.*").
-		Order("shows.popularity DESC").
-		Offset((page - 1) * limit).
-		Limit(limit).
-		Find(&shows).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	results := make([]recShowItem, 0, len(shows))
-	for _, s := range shows {
+// buildShowItems is buildMovieItems for shows.
+func buildShowItems(rows []database.Show, ranked map[int64]int, genreFilter string) []recShowItem {
+	ordered := orderShows(rows, ranked)
+	results := make([]recShowItem, 0, len(ordered))
+	for _, s := range ordered {
+		if !matchesGenre(s.Genres, genreFilter) {
+			continue
+		}
 		results = append(results, recShowItem{
 			ID:           s.ID,
 			TmdbID:       s.TmdbID,
@@ -307,21 +371,82 @@ func handlePersonalizedShows(c *fiber.Ctx) error {
 			Poster:       s.Images.StringValue("poster"),
 		})
 	}
-	if results == nil {
-		results = make([]recShowItem, 0)
-	}
-
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	return results
 }
 
-// ============================================================================
-// SOCIAL RECOMMENDATIONS
-// ============================================================================
+func orderMovies(rows []database.Movie, ranked map[int64]int) []database.Movie {
+	sort.SliceStable(rows, func(i, j int) bool { return ranked[rows[i].ID] < ranked[rows[j].ID] })
+	return rows
+}
+
+func orderShows(rows []database.Show, ranked map[int64]int) []database.Show {
+	sort.SliceStable(rows, func(i, j int) bool { return ranked[rows[i].ID] < ranked[rows[j].ID] })
+	return rows
+}
+
+// matchesGenre keeps a row whose genres carry the requested name.
+func matchesGenre(genres database.StringSlice, wanted string) bool {
+	wanted = strings.TrimSpace(wanted)
+	if wanted == "" {
+		return true
+	}
+	for _, genre := range genres {
+		if strings.EqualFold(strings.TrimSpace(genre), wanted) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+// Dismissing a recommendation
+// ---------------------------------------------------------------------------
+
+// handleHideMovieRecommendation serves DELETE /v1/recommendations/movies/{id}.
+//
+// Dismissing a row is stored as a hidden entry in the "recommendations"
+// section — the same table the calendar and progress feeds read — so the engine
+// stops offering the title without the account losing it from its history.
+func handleHideMovieRecommendation(c *fiber.Ctx) error {
+	return hideRecommendation(c, "movie")
+}
+
+// handleHideShowRecommendation serves DELETE /v1/recommendations/shows/{id}.
+func handleHideShowRecommendation(c *fiber.Ctx) error {
+	return hideRecommendation(c, "show")
+}
+
+func hideRecommendation(c *fiber.Ctx, kind string) error {
+	userID := c.Locals("user_id").(string)
+
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.BadRequest(c, "id must be a positive integer")
+	}
+
+	db, err := database.GetDB()
+	if err != nil {
+		return response.InternalError(c)
+	}
+
+	hidden := database.UserHidden{
+		UserID:    userID,
+		Section:   recommend.HiddenSection,
+		MediaType: kind,
+		MediaID:   id,
+		HiddenAt:  time.Now().UTC(),
+	}
+	// Dismissing twice is not an error: the account's intent is the same.
+	if err := db.Where(database.UserHidden{
+		UserID: userID, Section: recommend.HiddenSection, MediaType: kind, MediaID: id,
+	}).FirstOrCreate(&hidden).Error; err != nil {
+		return response.InternalError(c)
+	}
+
+	// Hiding is a state change, not a document; 204 keeps clients from parsing a
+	// body they do not need.
+	return c.SendStatus(fiber.StatusNoContent)
+}
 
 func handleSocialMovies(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
