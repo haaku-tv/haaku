@@ -2,6 +2,7 @@ package stats
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -55,12 +56,23 @@ func seedEpisode(t *testing.T, db *gorm.DB, showID, seasonID int64, episodeNumbe
 	return e
 }
 
-func seedHistory(t *testing.T, db *gorm.DB, userID, mediaType string, mediaID int64, seasonID, episodeID *int64) {
+// seedHistory writes one play. watchedAt and sourceID are parameters rather
+// than defaults because the migrations dedupe on
+// (user, media_type, media_id, source, source_id) — watched_at is NOT part of
+// the key — so a second play of the same title is only storable when it carries
+// its own upstream event id. A fixture that inserts both with source="api" and
+// no source_id is storable on sqlite (where the expression index does not
+// exist) and rejected by PostgreSQL with a duplicate-key violation, which is
+// exactly what a fixture that only runs on the lax engine hides.
+func seedHistory(t *testing.T, db *gorm.DB, userID, mediaType string, mediaID int64, watchedAt time.Time, sourceID string, seasonID, episodeID *int64) {
 	t.Helper()
 	h := database.UserHistory{
 		UserID: userID, MediaType: mediaType, MediaID: mediaID,
 		SeasonID: seasonID, EpisodeID: episodeID,
-		WatchedAt: time.Now(), Source: "api",
+		WatchedAt: watchedAt, Source: "api",
+	}
+	if sourceID != "" {
+		h.SourceID = &sourceID
 	}
 	if err := db.Create(&h).Error; err != nil {
 		t.Fatalf("seed history %s %d: %v", mediaType, mediaID, err)
@@ -117,16 +129,36 @@ func seedActivity(t *testing.T, db *gorm.DB, userID string) {
 
 	m1 := seedMovie(t, db, 100)
 	m2 := seedMovie(t, db, 120)
-	seedHistory(t, db, userID, "movie", m1.ID, nil, nil)
-	seedHistory(t, db, userID, "movie", m1.ID, nil, nil)
-	seedHistory(t, db, userID, "movie", m2.ID, nil, nil)
+	// Two plays of m1: distinct play times AND distinct source ids, because the
+	// dedupe key is (user, media, source, source_id) — see seedHistory.
+	at := time.Now().Add(-24 * time.Hour)
+	seedHistory(t, db, userID, "movie", m1.ID, at, "play-1", nil, nil)
+	seedHistory(t, db, userID, "movie", m1.ID, at.Add(time.Hour), "play-2", nil, nil)
+	seedHistory(t, db, userID, "movie", m2.ID, at.Add(2*time.Hour), "play-3", nil, nil)
+
+	// The episode rows below point at shows 1/2 and seasons 11/21, so those
+	// parents have to exist: sqlite's AutoMigrate schema does not enforce the
+	// references, a database built from the SQL migrations does, and an insert
+	// that only works on the lax engine is a fixture that lies.
+	for _, show := range []database.Show{{ID: 1, Title: "show"}, {ID: 2, Title: "show"}} {
+		if err := db.Create(&show).Error; err != nil {
+			t.Fatalf("seed show %d: %v", show.ID, err)
+		}
+	}
+	for _, season := range []database.Season{{ID: 11, ShowID: 1, SeasonNumber: 1}, {ID: 21, ShowID: 2, SeasonNumber: 1}} {
+		if err := db.Create(&season).Error; err != nil {
+			t.Fatalf("seed season %d: %v", season.ID, err)
+		}
+	}
 
 	e1 := seedEpisode(t, db, 1, 11, 1, 45)
 	e2 := seedEpisode(t, db, 1, 11, 2, 30)
 	e3 := seedEpisode(t, db, 2, 21, 1, 60)
-	for _, e := range []database.Episode{e1, e2, e2, e3} {
+	// e2 is played twice, so each row carries its own source id (same dedupe key).
+	for i, e := range []database.Episode{e1, e2, e2, e3} {
 		seasonID, episodeID := e.SeasonID, e.ID
-		seedHistory(t, db, userID, "episode", e.ID, &seasonID, &episodeID)
+		seedHistory(t, db, userID, "episode", e.ID, at.Add(time.Duration(3+i)*time.Hour),
+			fmt.Sprintf("ep-play-%d", i+1), &seasonID, &episodeID)
 	}
 
 	seedCollected(t, db, userID, "movie", m1.ID)
@@ -144,6 +176,11 @@ func seedActivity(t *testing.T, db *gorm.DB, userID string) {
 	seedComment(t, db, userID, "show")
 	seedComment(t, db, userID, "") // a list comment: no media type
 
+	// The follower users have to exist before the follow rows: PostgreSQL
+	// enforces the foreign key the sqlite AutoMigrate schema does not.
+	for _, follower := range []string{"fan-a", "fan-b", "fan-c"} {
+		seedStatsUser(t, db, follower, false, false)
+	}
 	seedFollow(t, db, "fan-a", userID)
 	seedFollow(t, db, "fan-b", userID)
 	seedFollow(t, db, userID, "fan-b")

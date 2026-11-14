@@ -46,8 +46,6 @@ func statsPrivacyDB(t *testing.T) *gorm.DB {
 		// The stats payload is an aggregate over these tables (issue #98), so
 		// they have to exist even for the privacy tests, which exercise the
 		// same handler.
-		&database.Movie{},
-		&database.Episode{},
 		&database.UserHistory{},
 		&database.UserCollection{},
 		&database.UserRating{},
@@ -55,10 +53,23 @@ func statsPrivacyDB(t *testing.T) *gorm.DB {
 	); err != nil {
 		t.Fatalf("migrate test DB: %v", err)
 	}
+	if os.Getenv("DATABASE_URL") == "" {
+		// The media tables are sqlite-only here: on PostgreSQL the SQL
+		// migrations own them, and AutoMigrating them fights the schema — the
+		// model declares search_vector as a string, so AutoMigrate tries
+		// `ALTER TABLE episodes ALTER COLUMN search_vector TYPE text`, which
+		// PostgreSQL refuses while the migration's GIN index exists (data type
+		// text has no default operator class for access method gin).
+		if err := db.AutoMigrate(
+			&database.Movie{}, &database.Show{}, &database.Season{}, &database.Episode{},
+		); err != nil {
+			t.Fatalf("migrate media test tables: %v", err)
+		}
+	}
 	for _, table := range []string{
 		"users", "user_follows", "user_blocks", "user_stats",
 		"movies", "episodes", "user_history", "user_collection",
-		"user_ratings", "comments",
+		"user_ratings", "comments", "seasons", "shows",
 	} {
 		if err := db.Exec("DELETE FROM " + table).Error; err != nil {
 			t.Fatalf("clear %s: %v", table, err)

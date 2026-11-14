@@ -74,6 +74,21 @@ func (ct *CacheTransaction) AddSetOperation(key string, data interface{}, ttl ti
 	})
 }
 
+// QueuedInvalidationKeys returns the keys this transaction will invalidate when
+// it executes. It exists so a write path's test can assert what that write
+// invalidates (which cached aggregate it keeps honest) without a live Redis.
+func (ct *CacheTransaction) QueuedInvalidationKeys() []string {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	keys := make([]string, 0, len(ct.operations))
+	for _, op := range ct.operations {
+		if op.Type == "invalidate" {
+			keys = append(keys, op.Key)
+		}
+	}
+	return keys
+}
+
 // Execute runs all queued cache operations. Returns an error only if ALL
 // operations failed; individual failures are logged but don't block the caller.
 func (ct *CacheTransaction) Execute() error {
