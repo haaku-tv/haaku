@@ -1,4 +1,4 @@
-import type { Ids, SearchResult } from '@/api/types'
+import type { Ids, Person, SearchResult } from '@/api/types'
 import { episodeStill, firstImage } from '@/lib/images'
 import { mediaLink } from '@/lib/media-url'
 
@@ -20,6 +20,14 @@ export interface CardModel {
   /** inCatalog means the row exists locally: link straight to it. */
   inCatalog: boolean
   navigateTo?: { to: string; id: string }
+}
+
+/** personMeta is the line under a person's name: what they are known for. */
+function personMeta(person: Person): string | undefined {
+  // `/v1/search` serialises the field as `known_for`; reading a provider-shaped
+  // `known_for_department` off the row found nothing and left every person card
+  // without its second line.
+  return person.known_for || undefined
 }
 
 export function cardOf(result: SearchResult): CardModel | null {
@@ -70,7 +78,9 @@ export function cardOf(result: SearchResult): CardModel | null {
       return {
         mediaType: 'episode',
         title: String(ep.title ?? ''),
-        meta: `S${ep.season} E${ep.number}`,
+        meta: [ep.show_title, `S${ep.season} E${ep.number}`]
+          .filter(Boolean)
+          .join(' · '),
         image: episodeStill(ep.images),
         aspect: '16:9',
         ids: ep.ids,
@@ -84,16 +94,20 @@ export function cardOf(result: SearchResult): CardModel | null {
     case 'person': {
       const p = result.person
       if (!p) return null
+      // A person is addressed by their local row id, like every other local
+      // route. This used to read the slug, which the person payload does not
+      // carry, so every result linked to /people/undefined.
+      const localId = p.ids.trakt || p.ids.id || 0
       return {
         mediaType: 'person',
         title: String(p.name ?? ''),
+        meta: personMeta(p),
         image: firstImage(p.images, 'headshot', 'fanart', 'poster'),
         aspect: '2:3',
         ids: p.ids,
-        inCatalog: true,
-        navigateTo: p.ids.slug
-          ? { to: '/people/$id', id: String(p.ids.slug) }
-          : undefined,
+        inCatalog: localId > 0,
+        navigateTo:
+          localId > 0 ? { to: '/people/$id', id: String(localId) } : undefined,
       }
     }
     case 'list': {

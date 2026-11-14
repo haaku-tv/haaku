@@ -123,6 +123,8 @@ export interface Show {
 
 export interface Episode {
   season: number
+  /** show_title is set on search cards so an episode is legible out of context. */
+  show_title?: string
   number: number
   title: string
   ids: Ids
@@ -152,6 +154,8 @@ export interface Season {
 export interface Person {
   name: string
   ids: Ids
+  /** What the person is known for, when the search row carries it. */
+  known_for?: string
   biography?: string
   birthday?: string
   death?: string

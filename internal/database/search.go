@@ -8,11 +8,17 @@ import (
 )
 
 // SearchResult wraps a single search hit with its type and payload.
+//
+// List hits are absent on purpose: a list is only searchable once it has an
+// audience (an instance-shared list, see the list-sharing issue), so a `list`
+// type is accepted by the route and answered from nothing rather than shipped
+// as a permanently empty pill.
 type SearchResult struct {
-	Type  string `json:"type"`
-	Movie *Movie `json:"movie,omitempty"`
-	Show  *Show  `json:"show,omitempty"`
-	// Future: Episode, Person, List
+	Type    string   `json:"type"`
+	Movie   *Movie   `json:"movie,omitempty"`
+	Show    *Show    `json:"show,omitempty"`
+	Episode *Episode `json:"episode,omitempty"`
+	Person  *Person  `json:"person,omitempty"`
 }
 
 // SearchParams holds the validated search query parameters.
@@ -25,6 +31,15 @@ type SearchParams struct {
 }
 
 // SearchResponse is the paginated search response envelope.
+const (
+	// defaultSearchLimit is the page size when a caller names none.
+	defaultSearchLimit = 20
+	// maxSearchWindow bounds how many rows one search may materialise per type.
+	// A self-hosted catalogue is not a search engine: past this the caller is
+	// paging through a result set nobody scrolls.
+	maxSearchWindow = int64(5000)
+)
+
 type SearchResponse struct {
 	Results    []SearchResult `json:"results"`
 	TotalItems int64          `json:"total_items"`
@@ -145,12 +160,45 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 	var results []SearchResult
 	var totalItems int64
 
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := params.Limit
+	if limit < 1 {
+		limit = defaultSearchLimit
+	}
+
+	// Each type is fetched with the window the caller asked for. Passing page 1
+	// and slicing the combined rows afterwards answered every page from the
+	// first page's rows — a second page whose rows happened to sit past the
+	// first window came back empty while the total said otherwise.
+	//
+	// That window is bounded. `page * limit` sizes the fetch, so an unbounded
+	// page asks each type for millions of rows just to slice all but the last
+	// few away, and a large enough page overflows int on the way. Past the cap
+	// the rows are not wanted at all: the counts are still read (one row per
+	// type) so the answer keeps its total, and the results come back empty
+	// because the requested page sits outside what this endpoint will
+	// materialise.
+	offset := int64(page) * int64(limit)
+	beyondWindow := offset > maxSearchWindow
+	windowSize := int(offset)
+	if beyondWindow {
+		windowSize = 1
+	}
+
+	window := SearchParams{
+		Query:  params.Query,
+		Page:   1,
+		Limit:  windowSize,
+		Fields: params.Fields,
+	}
+
 	for _, typ := range params.Types {
 		switch strings.ToLower(typ) {
 		case "movie":
-			movies, count, err := SearchMovies(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			movies, count, err := SearchMovies(db, window)
 			if err != nil {
 				return nil, err
 			}
@@ -159,9 +207,7 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 				results = append(results, SearchResult{Type: "movie", Movie: &movies[i]})
 			}
 		case "show":
-			shows, count, err := SearchShows(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			shows, count, err := SearchShows(db, window)
 			if err != nil {
 				return nil, err
 			}
@@ -170,39 +216,48 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 				results = append(results, SearchResult{Type: "show", Show: &shows[i]})
 			}
 		case "episode":
-			episodes, count, err := SearchEpisodes(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			// Catalogue-only by nature: the metadata provider has no episode
+			// search endpoint, so an episode is findable once its show has been
+			// ingested and not before. The rows used to be counted and dropped.
+			episodes, count, err := SearchEpisodes(db, window)
 			if err != nil {
 				return nil, err
 			}
 			totalItems += count
-			// TODO(Phase 2): Add Episode field to SearchResult
-			_ = episodes
+			for i := range episodes {
+				results = append(results, SearchResult{Type: "episode", Episode: &episodes[i]})
+			}
 		case "person":
-			people, count, err := SearchPeople(db, SearchParams{
-				Query: params.Query, Page: 1, Limit: params.Limit, Fields: params.Fields,
-			})
+			people, count, err := SearchPeople(db, window)
 			if err != nil {
 				return nil, err
 			}
 			totalItems += count
-			// TODO(Phase 2): Add Person field to SearchResult
-			_ = people
+			for i := range people {
+				results = append(results, SearchResult{Type: "person", Person: &people[i]})
+			}
 		}
 	}
 
 	// Apply pagination as a slice window over combined results.
 	totalPages := 1
-	if params.Limit > 0 {
-		totalPages = (int(totalItems) + params.Limit - 1) / params.Limit
+	if limit > 0 {
+		totalPages = (int(totalItems) + limit - 1) / limit
 	}
-	page := params.Page
-	if page < 1 {
-		page = 1
+	if beyondWindow {
+		// The window was not materialised beyond the first row of each type, so
+		// there is nothing to slice: the page the caller asked for sits past
+		// everything this endpoint will read. The totals above are real.
+		return &SearchResponse{
+			Results:    []SearchResult{},
+			TotalItems: totalItems,
+			Page:       page,
+			Limit:      limit,
+			TotalPages: totalPages,
+		}, nil
 	}
-	start := (page - 1) * params.Limit
-	end := start + params.Limit
+	start := (page - 1) * limit
+	end := start + limit
 	if start > len(results) {
 		start = len(results)
 	}
@@ -214,7 +269,7 @@ func SearchMulti(db *gorm.DB, params SearchParams) (*SearchResponse, error) {
 		Results:    results[start:end],
 		TotalItems: totalItems,
 		Page:       page,
-		Limit:      params.Limit,
+		Limit:      limit,
 		TotalPages: totalPages,
 	}, nil
 }
