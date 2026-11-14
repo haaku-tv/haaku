@@ -69,6 +69,7 @@ export function AddToListDialog({
     data: memberOf,
     isLoading: memberLoading,
     isError: memberError,
+    refetch: refetchMembership,
   } = useListMembership(api, kind, mediaID)
   const addToList = useAddToList(api)
   const removeFromList = useRemoveFromList(api)
@@ -158,10 +159,21 @@ export function AddToListDialog({
             </p>
           )}
           {memberError && (
-            <p className="text-xs text-red-300">
-              Could not read your lists for this title — close and reopen to
-              retry.
-            </p>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-red-500/30 px-3 py-2">
+              <p className="text-xs text-red-300">
+                Could not read your lists for this title.
+              </p>
+              {/* The dialog stays mounted while closed, so closing it does not
+                  re-run the query — a retry has to be explicit. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => refetchMembership()}
+                disabled={memberLoading}
+              >
+                {memberLoading ? 'Retrying…' : 'Retry'}
+              </Button>
+            </div>
           )}
 
           {isLoading ? (
