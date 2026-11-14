@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Play, RotateCcw } from 'lucide-react'
-import type * as React from 'react'
+import * as React from 'react'
 import { cn } from '../../lib/utils'
 import { WatchProgress } from '../shared/watch-progress'
 
@@ -18,20 +18,9 @@ export type PosterCardProps = Omit<
   fallback?: React.ReactNode
 }
 
-/**
- * A poster card.
- *
- * There is deliberately NO cursor-tracking 3D tilt here. The card used to apply
- * `perspective() rotateX() rotateY()` from pointer coordinates measured with
- * `getBoundingClientRect()` on the same element it transformed, which turned
- * pointer movement and scrolling into a runaway zoom on the owner's browser: the
- * rotated element's bounding box differs from its layout box, so every sample
- * measured a box the previous sample had changed, and the card grew without
- * bound until it filled the viewport and the page could not be scrolled.
- * No bounded version of that effect is worth a page that cannot be read, so the
- * hover feedback is now purely inside the card's own clipped frame: the image
- * scales and the overlay/play button fade in, all clipped by `overflow-hidden`.
- */
+/** Degrees of rotation at the edge of the card: ±4° at the corners. */
+const TILT_RANGE = 8
+
 export function PosterCard({
   title,
   meta,
@@ -44,6 +33,48 @@ export function PosterCard({
   className,
   ...rest
 }: PosterCardProps) {
+  const [tilt, setTilt] = React.useState({ x: 0, y: 0 })
+
+  // The pointer position is measured against the box captured on ENTER, never
+  // against the element's live rect: that element carries the rotation this
+  // state drives, so `getBoundingClientRect()` returns a box that grows as the
+  // card turns, feeding the next pointer sample a different fraction — a
+  // feedback loop between a transform and the measurement of the same element.
+  // Capturing once (while the card is untransformed) breaks it, so the effect
+  // is bounded no matter how long the pointer moves across the card.
+  const rectRef = React.useRef<DOMRect | null>(null)
+  const stillRef = React.useRef(false)
+  React.useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!query) return
+    stillRef.current = query.matches
+    const onChange = (event: MediaQueryListEvent) => {
+      stillRef.current = event.matches
+      if (event.matches) setTilt({ x: 0, y: 0 })
+    }
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+
+  const handleEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    rectRef.current = e.currentTarget.getBoundingClientRect()
+  }
+
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = rectRef.current
+    if (stillRef.current || !rect || rect.width === 0 || rect.height === 0)
+      return
+    const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1)
+    const px = clamp01((e.clientX - rect.left) / rect.width)
+    const py = clamp01((e.clientY - rect.top) / rect.height)
+    setTilt({ y: (px - 0.5) * TILT_RANGE, x: (0.5 - py) * TILT_RANGE })
+  }
+
+  const handleLeave = () => {
+    rectRef.current = null
+    setTilt({ x: 0, y: 0 })
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
@@ -52,9 +83,22 @@ export function PosterCard({
       transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
       className="shrink-0 min-w-(--sf-card-min)"
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: cursor tilt is decorative, no keyboard interaction needed */}
       <div
         data-rail-card
+        onMouseEnter={handleEnter}
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
         className={cn('group relative w-full', className)}
+        style={
+          {
+            '--tilt-x': `${tilt.x}deg`,
+            '--tilt-y': `${tilt.y}deg`,
+            transform:
+              'perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y))',
+            transition: 'transform 220ms cubic-bezier(0.2,0.8,0.2,1)',
+          } as React.CSSProperties
+        }
         {...rest}
       >
         <div
