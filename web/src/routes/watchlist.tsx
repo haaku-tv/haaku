@@ -1,10 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Grid3X3, Trash2 } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Grid3X3, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useRemoveFromWatchlist, useWatchlist } from '@/api/hooks'
 import type { WatchlistItem } from '@/api/types'
+import { useAuth } from '@/auth/context'
 import { Page, PosterGrid, Section } from '@/components/layout'
 import {
+  Button,
   FilterPill,
   PaginationControls,
   PosterCard,
@@ -14,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui'
+import { firstImage } from '@/lib/images'
+import { mediaLink } from '@/lib/media-url'
 
 export const Route = createFileRoute('/watchlist')({
   component: WatchlistPage,
@@ -27,14 +31,35 @@ const typeMap: Record<MediaTypeFilter, string | undefined> = {
   shows: 'show',
 }
 
+/**
+ * The sort values the API actually accepts.
+ *
+ * The handler switches on rank / listed / added / title and falls back to rank
+ * for anything else, so a menu built from wishful names is a menu whose entries
+ * silently do the same thing.
+ */
+const SORT_OPTIONS = [
+  { value: 'rank', label: 'Rank', how: 'asc' },
+  { value: 'title', label: 'Title', how: 'asc' },
+  // The handler's default direction is ascending, which on a timestamp means
+  // the oldest entries first — the opposite of what these two labels promise.
+  { value: 'added', label: 'Recently added', how: 'desc' },
+  { value: 'listed', label: 'Recently listed', how: 'desc' },
+] as const
+
 function WatchlistPage() {
+  const { isSignedIn } = useAuth()
   const [mediaType, setMediaType] = useState<MediaTypeFilter>('all')
-  const [sort, setSort] = useState<string>('rank')
+  const [sortBy, setSortBy] = useState<string>('rank')
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useWatchlist({
+  const sortHow =
+    SORT_OPTIONS.find((option) => option.value === sortBy)?.how ?? 'asc'
+
+  const { data, isLoading, isError } = useWatchlist({
     type: typeMap[mediaType],
-    sort,
+    sortBy,
+    sortHow,
     page,
     limit: 24,
   })
@@ -45,8 +70,7 @@ function WatchlistPage() {
   const totalPages = data?.total_pages ?? 1
 
   const handleRemove = (item: WatchlistItem) => {
-    const body = buildRemoveBody(item)
-    removeMutation.mutate(body)
+    removeMutation.mutate(buildRemoveBody(item))
   }
 
   return (
@@ -59,57 +83,49 @@ function WatchlistPage() {
             </h1>
             {data && (
               <p className="mt-1 text-sm text-sf-ink-muted">
-                {data.total} items
+                {data.total} {data.total === 1 ? 'item' : 'items'}
               </p>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-1">
-              <FilterPill
-                active={mediaType === 'all'}
-                onClick={() => {
-                  setMediaType('all')
-                  setPage(1)
-                }}
-              >
-                All
-              </FilterPill>
-              <FilterPill
-                active={mediaType === 'movies'}
-                onClick={() => {
-                  setMediaType('movies')
-                  setPage(1)
-                }}
-              >
-                Movies
-              </FilterPill>
-              <FilterPill
-                active={mediaType === 'shows'}
-                onClick={() => {
-                  setMediaType('shows')
-                  setPage(1)
-                }}
-              >
-                Shows
-              </FilterPill>
+              {(
+                [
+                  ['all', 'All'],
+                  ['movies', 'Movies'],
+                  ['shows', 'Shows'],
+                ] as const
+              ).map(([value, label]) => (
+                <FilterPill
+                  key={value}
+                  active={mediaType === value}
+                  onClick={() => {
+                    setMediaType(value)
+                    setPage(1)
+                  }}
+                >
+                  {label}
+                </FilterPill>
+              ))}
             </div>
 
             <Select
-              value={sort}
-              onValueChange={(v) => {
-                setSort(v)
+              value={sortBy}
+              onValueChange={(value) => {
+                setSortBy(value)
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="rank">Rank</SelectItem>
-                <SelectItem value="title">Title</SelectItem>
-                <SelectItem value="added_at">Added</SelectItem>
-                <SelectItem value="released">Released</SelectItem>
+                {SORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -117,50 +133,41 @@ function WatchlistPage() {
 
         {isLoading ? (
           <PosterGrid>
-            {Array.from({ length: 12 }).map((_, i) => (
+            {Array.from({ length: 12 }, (_, index) => (
               <div
-                key={i}
+                key={index}
                 className="glass aspect-[2/3] animate-pulse rounded-sf"
               />
             ))}
           </PosterGrid>
+        ) : isError ? (
+          <EmptyState
+            title="Could not load your watchlist"
+            body="The request failed. Try again in a moment."
+          />
         ) : items.length === 0 ? (
-          <div className="glass flex flex-col items-center gap-4 rounded-[var(--sf-radius-lg)] px-6 py-14 text-center">
-            <span className="grid size-14 place-items-center rounded-full bg-sf-accent/12 text-sf-accent-2">
-              <Grid3X3 className="size-6" />
-            </span>
-            <h3 className="font-display text-xl font-bold text-sf-ink">
-              Your watchlist is empty
-            </h3>
-            <p className="text-sm text-sf-ink-muted">
-              Browse trending shows and movies to find something to watch.
-            </p>
-          </div>
+          <EmptyState
+            title={
+              mediaType === 'all'
+                ? 'Your watchlist is empty'
+                : `No ${mediaType} on your watchlist`
+            }
+            body={
+              mediaType === 'all'
+                ? 'Browse trending shows and movies to find something to watch.'
+                : `You have other titles saved — switch back to “Everything” to see them.`
+            }
+          />
         ) : (
           <>
             <PosterGrid>
-              {items.map((item) => {
-                const media = item.movie ?? item.show
-                if (!media) return null
-                return (
-                  <div key={item.id} className="group relative">
-                    <PosterCard
-                      title={media.title}
-                      meta={String(media.year)}
-                      aspect="2:3"
-                      type={item.movie ? 'movie' : 'series'}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(item)}
-                      className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
-                      aria-label="Remove from watchlist"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                )
-              })}
+              {items.map((item) => (
+                <WatchlistCard
+                  key={item.id}
+                  item={item}
+                  onRemove={() => handleRemove(item)}
+                />
+              ))}
             </PosterGrid>
 
             {totalPages > 1 && (
@@ -174,8 +181,93 @@ function WatchlistPage() {
             )}
           </>
         )}
+
+        {!isSignedIn && (
+          <p className="mt-6 text-sm text-sf-ink-muted">
+            Sign in to keep a watchlist.
+          </p>
+        )}
       </Section>
     </Page>
+  )
+}
+
+/**
+ * One watchlisted title.
+ *
+ * The card carries the poster the payload already holds and opens the title's
+ * page; the remove control stops the click it sits on top of so removing a row
+ * does not also navigate to it. Episodes are listed with their show's artwork
+ * because a watchlist row for an episode carries no images of its own.
+ */
+function WatchlistCard({
+  item,
+  onRemove,
+}: {
+  item: WatchlistItem
+  onRemove: () => void
+}) {
+  const media = item.movie ?? item.show
+  if (!media) return null
+
+  const kind = item.movie ? 'movie' : 'show'
+  const link = mediaLink(kind, media.ids)
+  const poster = firstImage(media.images, 'poster', 'thumb')
+  const year = media.year ? String(media.year) : undefined
+  const rating = media.rating ? media.rating.toFixed(1) : undefined
+
+  const card = (
+    <PosterCard
+      title={media.title}
+      meta={year}
+      image={poster}
+      rating={rating}
+      aspect="2:3"
+      type={item.movie ? 'movie' : 'series'}
+    />
+  )
+
+  return (
+    <div className="group relative">
+      {/* A real link, not a clickable div: the remove control is a sibling so
+          the two targets never nest, and Enter/Space work without a handler. */}
+      {link ? (
+        <Link to={link.to} params={{ id: link.id }} className="block">
+          {card}
+        </Link>
+      ) : (
+        card
+      )}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRemove()
+        }}
+        className="absolute top-2 right-2 rounded-full bg-black/70 p-1.5 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        aria-label={`Remove ${media.title} from watchlist`}
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="glass flex flex-col items-center gap-4 rounded-[var(--sf-radius-lg)] px-6 py-14 text-center">
+      <span className="grid size-14 place-items-center rounded-full bg-sf-accent/12 text-sf-accent-2">
+        <Grid3X3 className="size-6" />
+      </span>
+      <h3 className="font-display text-xl font-bold text-sf-ink">{title}</h3>
+      <p className="max-w-sm text-sm text-sf-ink-muted">{body}</p>
+      <Button size="sm" variant="glass" asChild>
+        <Link to="/search">
+          <Search className="size-4" />
+          Find something
+        </Link>
+      </Button>
+    </div>
   )
 }
 
