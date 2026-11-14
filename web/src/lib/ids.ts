@@ -18,3 +18,23 @@ export function localRowID(ids: Ids | null | undefined): number {
 export function tmdbID(ids: Ids | null | undefined): number {
   return ids?.tmdb ?? 0
 }
+
+/** The bits of a list row that address it: the contract ids, or a bare row id. */
+export type ListRowKey = {
+  ids?: { trakt?: number; slug?: string } | null
+  id?: number
+}
+
+/**
+ * listRowID is the number that addresses a list on this instance.
+ *
+ * It lives in `ids.trakt` (the contract key), and this helper also accepts a
+ * bare top-level `id` — an endpoint that answered the stored row instead of the
+ * contract object left `ids` undefined, and reading `list.ids.trakt`
+ * unconditionally is what threw and blanked the whole My Lists page. One helper
+ * keeps a shape regression to a missing link rather than a dead page.
+ */
+export function listRowID(list: ListRowKey | null | undefined): number {
+  if (!list) return 0
+  return list.ids?.trakt || list.id || 0
+}

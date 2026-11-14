@@ -21,7 +21,9 @@ export type ListPrivacy = 'public' | 'private' | 'link_only'
 
 export interface TraktList {
   name: string
-  description: string
+  // The contract allows description to be null; the server emits null for an
+  // empty one, so an input has to read `?? ''`.
+  description: string | null
   privacy: ListPrivacy
   display_numbers: boolean
   allow_comments: boolean

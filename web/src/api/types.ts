@@ -232,7 +232,7 @@ export interface RatingDistribution {
 
 export interface TraktList {
   name: string
-  description?: string
+  description?: string | null
   privacy?: string
   display_numbers?: boolean
   allow_comments?: boolean

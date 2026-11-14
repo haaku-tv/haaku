@@ -6,6 +6,7 @@ import type { SmartList, SmartListFilter } from '@/api/types/lists'
 import { Page, Section } from '@/components/layout'
 import { SmartListEditor } from '@/components/lists/SmartListEditor'
 import { Badge, Banner, Button } from '@/components/ui'
+import { listRowID } from '@/lib/ids'
 
 export const Route = createFileRoute('/lists/smart/new')({
   component: SmartListNewPage,
@@ -57,7 +58,7 @@ function SmartListNewPage() {
           <div className="space-y-3">
             {existingSmartLists.map((sl: SmartList) => (
               <div
-                key={sl.ids.trakt}
+                key={listRowID(sl)}
                 className="glass rounded-2xl p-4 flex items-center justify-between"
               >
                 <div>

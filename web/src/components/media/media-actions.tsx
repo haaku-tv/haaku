@@ -1,5 +1,7 @@
-import { Bookmark, BookmarkCheck, Check, Heart, Play } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Check, Heart, Play, X } from 'lucide-react'
 import { useState } from 'react'
+import { useApi } from '@/api/client'
+import { useListMembership, useRemoveFromList } from '@/api/hooks/useLists'
 import {
   useAddRating,
   useAddToFavorites,
@@ -11,13 +13,20 @@ import {
 } from '@/api/hooks/useSync'
 import type { Ids } from '@/api/types'
 import { useAuth } from '@/auth/context'
+import {
+  AddToListButton,
+  mediaListPayload,
+} from '@/components/lists/AddToListDialog'
 import { Button } from '@/components/ui'
+import { listRowID, localRowID } from '@/lib/ids'
 import { cn } from '@/lib/utils'
 import { useMediaUserState } from './use-media-user-state'
 
 export type MediaActionsProps = {
   kind: 'movie' | 'show'
   ids: Ids | undefined
+  /** The title, used by the add-to-list dialog's header. */
+  title?: string
   trailer?: string
   /** The title's own rating, shown on the primary action's tooltip. */
   className?: string
@@ -34,11 +43,14 @@ export type MediaActionsProps = {
 export function MediaActions({
   kind,
   ids,
+  title,
   trailer,
   className,
 }: MediaActionsProps) {
   const { isSignedIn } = useAuth()
+  const api = useApi()
   const state = useMediaUserState(kind, ids)
+  const rowID = localRowID(ids)
 
   const addHistory = useAddToHistory()
   const removeHistory = useRemoveFromHistory()
@@ -47,6 +59,11 @@ export function MediaActions({
   const addFavorite = useAddToFavorites()
   const removeFavorite = useRemoveFromFavorites()
   const addRating = useAddRating()
+
+  // Which of the caller's lists already hold this title, and the write that
+  // takes it out of one from the chip on the page.
+  const { data: memberOf } = useListMembership(api, kind, rowID)
+  const removeFromList = useRemoveFromList(api)
 
   const [watched, setWatched] = useState<boolean | null>(null)
   const [watchlisted, setWatchlisted] = useState<boolean | null>(null)
@@ -190,6 +207,37 @@ export function MediaActions({
           <Play className="size-3.5" />
           Trailer
         </a>
+      )}
+
+      <AddToListButton kind={kind} ids={ids} title={title} />
+
+      {/* Membership: the lists this title is already in, each removable in
+          place. The dialog above is where lists get added. */}
+      {memberOf && memberOf.length > 0 && (
+        <div className="flex basis-full flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-xs text-sf-ink-faint">In lists</span>
+          {memberOf.map((list) => {
+            const id = listRowID(list)
+            return (
+              <button
+                key={id}
+                type="button"
+                title={`Remove from ${list.name}`}
+                aria-label={`Remove from ${list.name}`}
+                onClick={() =>
+                  removeFromList.mutate({
+                    id,
+                    payload: mediaListPayload(kind, ids),
+                  })
+                }
+                className="inline-flex items-center gap-1.5 rounded-full border border-sf-line bg-sf-panel-2 px-2.5 py-1 text-xs font-medium text-sf-ink-muted transition-colors hover:border-red-500/40 hover:text-red-300"
+              >
+                <span className="max-w-40 truncate">{list.name}</span>
+                <X className="size-3" />
+              </button>
+            )
+          })}
+        </div>
       )}
     </div>
   )

@@ -25,6 +25,7 @@ import type {
 } from '@/api/types'
 import { Page, ScrollRow, Section } from '@/components/layout'
 import { ActivityItem, Button, PosterCard, SectionHead } from '@/components/ui'
+import { listRowID } from '@/lib/ids'
 import { firstImage } from '@/lib/images'
 import { mediaLink } from '@/lib/media-url'
 
@@ -302,13 +303,14 @@ function recommendationCard(item: RecommendationItem): HomeCard {
 
 function listCard(list: TraktList): HomeCard {
   return {
-    key: `list-${list.ids?.trakt ?? list.ids?.slug ?? list.name}`,
+    key: `list-${listRowID(list) || list.ids?.slug || list.name}`,
     title: list.name,
     meta: `${list.item_count ?? 0} items`,
     type: 'movie',
-    to: list.ids?.trakt
-      ? { to: '/lists/$id', id: String(list.ids.trakt) }
-      : undefined,
+    to:
+      listRowID(list) > 0
+        ? { to: '/lists/$id', id: String(listRowID(list)) }
+        : undefined,
   }
 }
 
