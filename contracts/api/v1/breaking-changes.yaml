@@ -41,3 +41,9 @@ acknowledged:
   - signature: "removed-status-code POST /v1/shows/{id}/progress/watched/reset 200"
     date: 2026-11-09
     reason: "The route now answers Trakt's documented 201 instead of 200; the body is unchanged ({reset_at}), so clients only need to treat 201 as success."
+  - signature: "removed-status-code GET /v1/movies/recommendations/{id} 501"
+    date: 2026-11-14
+    reason: "The recommendations engine landed: the route answers a ranked array with 200 instead of 501. Clients that treated 501 as unavailable now get related movies, in the same envelope they already parse."
+  - signature: "removed-status-code GET /v1/shows/recommendations/{id} 501"
+    date: 2026-11-14
+    reason: "Same as the movie row: the 501 placeholder became a working 200 with a ranked array of shows."

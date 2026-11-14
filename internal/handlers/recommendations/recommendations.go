@@ -1,20 +1,14 @@
 package recommendations
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/haaku-tv/haaku/internal/auth"
-	"github.com/haaku-tv/haaku/internal/cache"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/openapi"
-	projredis "github.com/haaku-tv/haaku/redis"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/haaku-tv/haaku/internal/response"
-	"gorm.io/gorm"
 )
 
 func init() {
@@ -35,6 +29,18 @@ func registerOpenAPIRoutes() {
 			Summary: "Get personalized show recommendations based on watch history",
 			Tags:    []string{"Recommendations"}, Auth: "required",
 			StatusCodes: map[int]string{200: "Show recommendations", 401: "Unauthorized"},
+		},
+		{
+			Method: "DELETE", Path: "/v1/recommendations/movies/{id}",
+			Summary: "Dismiss a movie from the recommendations",
+			Tags:    []string{"Recommendations"}, Auth: "required",
+			StatusCodes: map[int]string{204: "Dismissed", 400: "Invalid id", 401: "Unauthorized"},
+		},
+		{
+			Method: "DELETE", Path: "/v1/recommendations/shows/{id}",
+			Summary: "Dismiss a show from the recommendations",
+			Tags:    []string{"Recommendations"}, Auth: "required",
+			StatusCodes: map[int]string{204: "Dismissed", 400: "Invalid id", 401: "Unauthorized"},
 		},
 		// Social
 		{
@@ -67,6 +73,8 @@ func RegisterRoutes(api fiber.Router) {
 	recs := api.Group("/recommendations")
 	recs.Get("/movies", auth.AuthRequired(), handlePersonalizedMovies)
 	recs.Get("/shows", auth.AuthRequired(), handlePersonalizedShows)
+	recs.Delete("/movies/:id", auth.AuthRequired(), handleHideMovieRecommendation)
+	recs.Delete("/shows/:id", auth.AuthRequired(), handleHideShowRecommendation)
 
 	social := api.Group("/social_recommendations")
 	social.Get("/movies", auth.AuthRequired(), handleSocialMovies)
@@ -153,88 +161,39 @@ type anticipatedItem struct {
 // PERSONALIZED RECOMMENDATIONS
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Personalized recommendations
+// ---------------------------------------------------------------------------
+
+// candidatePool is the smallest number of ranked candidates a page request asks
+// the engine for, and maxCandidatePool the largest. The pool exists so the genre
+// filter runs over more than one page's worth of titles; the cap keeps a deep
+// page from materialising the catalogue.
+const (
+	candidatePool    = 200
+	maxCandidatePool = 500
+)
+
+// handlePersonalizedMovies serves GET /v1/recommendations/movies.
 func handlePersonalizedMovies(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-
-	db, err := database.GetDB()
-	if err != nil {
-		return response.InternalError(c)
-	}
-
-	genreFilter := c.Query("genre", "")
-	page, limit := response.ParsePagination(c, 20)
-
-	// Step 1: Get user's top 5 genres from history + favorites + ratings.
-	topGenres, err := fetchTopGenresCached(db, userID, 5)
-	if err != nil {
-		return response.InternalError(c)
-	}
-
-	if len(topGenres) == 0 {
-		return c.JSON(fiber.Map{
-			"items":     []recMovieItem{},
-			"page":      page,
-			"limit":     limit,
-			"row_count": 0,
-		})
-	}
-
-	// Step 2: Build query for unwatched movies in those genres.
-	var total int64
-	var movies []database.Movie
-
-	baseQuery := db.
-		Where("movies.genres ?| ?", topGenres).
-		Where("NOT EXISTS (SELECT 1 FROM user_history WHERE user_id = ? AND media_type = ? AND media_id = movies.id)", userID, "movie").
-		Where("NOT EXISTS (SELECT 1 FROM user_hidden WHERE user_id = ? AND media_type = ? AND media_id = movies.id)", userID, "movie")
-
-	if genreFilter != "" {
-		baseQuery = baseQuery.Where("movies.genres ? ?", genreFilter)
-	}
-
-	// Count total
-	if err := baseQuery.Distinct("movies.id").Count(&total).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	// Fetch page
-	if err := baseQuery.
-		Select("DISTINCT movies.*").
-		Order("movies.popularity DESC").
-		Offset((page - 1) * limit).
-		Limit(limit).
-		Find(&movies).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	results := make([]recMovieItem, 0, len(movies))
-	for _, m := range movies {
-		results = append(results, recMovieItem{
-			ID:         m.ID,
-			TmdbID:     m.TmdbID,
-			Title:      m.Title,
-			Overview:   m.Overview,
-			Popularity: m.Popularity,
-			Genres:     m.Genres.Values(),
-			Released:   m.Released.String(),
-			Runtime:    m.Runtime,
-			RatingAvg:  m.RatingAvg,
-			Poster:     m.Images.StringValue("poster"),
-		})
-	}
-	if results == nil {
-		results = make([]recMovieItem, 0)
-	}
-
-	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
-	})
+	return personalized(c, "movie")
 }
 
+// handlePersonalizedShows serves GET /v1/recommendations/shows.
 func handlePersonalizedShows(c *fiber.Ctx) error {
+	return personalized(c, "show")
+}
+
+// personalized ranks the catalogue for one account and one kind.
+//
+// The ranking itself lives in internal/recommend: it reads everything the
+// account has an opinion about (history, watchlist, favourites and ratings) and
+// scores the catalogue against it. This handler only does the HTTP shape — the
+// page window, the optional genre filter, and the envelope.
+//
+// A brand-new account gets the instance's popular titles instead of an empty
+// row, and the response says which of the two it got.
+func personalized(c *fiber.Ctx, kind string) error {
 	userID := c.Locals("user_id").(string)
 
 	db, err := database.GetDB()
@@ -245,83 +204,64 @@ func handlePersonalizedShows(c *fiber.Ctx) error {
 	genreFilter := c.Query("genre", "")
 	page, limit := response.ParsePagination(c, 20)
 
-	// Step 1: Get user's top 5 genres.
-	topGenres, err := fetchTopGenresCached(db, userID, 5)
+	// The provider is the backbone: it knows which titles belong together even
+	// on a brand-new instance with one user, which is exactly the case a
+	// collaborative engine cannot serve. The catalogue engine then fills the row
+	// from this instance's own taste, and supplies everything when no token is
+	// configured.
+	// Enough candidates to fill the requested page AFTER the genre filter has
+	// run: filtering a page-sized slice first would answer "no comedies" when
+	// the first twenty ranked titles all happen to be dramas. The pool is
+	// bounded so a deep page cannot ask the engine for the whole catalogue.
+	pool := page * limit
+	if pool < candidatePool {
+		pool = candidatePool
+	}
+	if pool > maxCandidatePool {
+		pool = maxCandidatePool
+	}
+
+	items, personalised, err := recommendationsFor(c, db, userID, kind, pool)
 	if err != nil {
 		return response.InternalError(c)
 	}
 
-	if len(topGenres) == 0 {
+	ids := make([]int64, 0, len(items))
+	ranked := make(map[int64]int, len(items))
+	for index, item := range items {
+		ranked[item.ID] = index
+		ids = append(ids, item.ID)
+	}
+
+	if kind == "show" {
+		var shows []database.Show
+		if err := db.Where("id IN ?", ids).Find(&shows).Error; err != nil {
+			return response.InternalError(c)
+		}
+		rendered, total := showPage(shows, ranked, genreFilter, page, limit)
 		return c.JSON(fiber.Map{
-			"items":     []recShowItem{},
-			"page":      page,
-			"limit":     limit,
-			"row_count": 0,
+			"items":        rendered,
+			"page":         page,
+			"limit":        limit,
+			"row_count":    total,
+			"personalised": personalised,
 		})
 	}
 
-	// Step 2: Build query for unwatched shows in those genres.
-	// "Unwatched" = no episode history for this show.
-	var total int64
-	var shows []database.Show
-
-	baseQuery := db.
-		Where("shows.genres ?| ?", topGenres).
-		Where(`NOT EXISTS (
-			SELECT 1 FROM user_history uh
-			JOIN episodes e ON uh.media_id = e.id
-			WHERE uh.user_id = ? AND uh.media_type = 'episode' AND e.show_id = shows.id
-		)`, userID).
-		Where("NOT EXISTS (SELECT 1 FROM user_hidden WHERE user_id = ? AND media_type = ? AND media_id = shows.id)", userID, "show")
-
-	if genreFilter != "" {
-		baseQuery = baseQuery.Where("shows.genres ? ?", genreFilter)
-	}
-
-	if err := baseQuery.Distinct("shows.id").Count(&total).Error; err != nil {
+	var movies []database.Movie
+	if err := db.Where("id IN ?", ids).Find(&movies).Error; err != nil {
 		return response.InternalError(c)
 	}
 
-	if err := baseQuery.
-		Select("DISTINCT shows.*").
-		Order("shows.popularity DESC").
-		Offset((page - 1) * limit).
-		Limit(limit).
-		Find(&shows).Error; err != nil {
-		return response.InternalError(c)
-	}
-
-	results := make([]recShowItem, 0, len(shows))
-	for _, s := range shows {
-		results = append(results, recShowItem{
-			ID:           s.ID,
-			TmdbID:       s.TmdbID,
-			Title:        s.Title,
-			Overview:     s.Overview,
-			Popularity:   s.Popularity,
-			Genres:       s.Genres.Values(),
-			FirstAired:   s.FirstAired.String(),
-			Status:       s.Status,
-			EpisodeCount: s.EpisodeCount,
-			RatingAvg:    s.RatingAvg,
-			Poster:       s.Images.StringValue("poster"),
-		})
-	}
-	if results == nil {
-		results = make([]recShowItem, 0)
-	}
-
+	rendered, total := moviePage(movies, ranked, genreFilter, page, limit)
 	return c.JSON(fiber.Map{
-		"items":     results,
-		"page":      page,
-		"limit":     limit,
-		"row_count": total,
+		"items":        rendered,
+		"page":         page,
+		"limit":        limit,
+		"row_count":    total,
+		"personalised": personalised,
 	})
 }
-
-// ============================================================================
-// SOCIAL RECOMMENDATIONS
-// ============================================================================
 
 func handleSocialMovies(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
@@ -721,138 +661,3 @@ func handleAnticipated(c *fiber.Ctx) error {
 		"row_count": total,
 	})
 }
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-// fetchTopGenres returns the user's top N genres from history, favorites, and ratings.
-func fetchTopGenres(db *gorm.DB, userID string, n int) ([]string, error) {
-	sql := `
-		SELECT genre, COUNT(*) AS cnt FROM (
-			-- Movie watch history
-			SELECT jsonb_array_elements_text(m.genres) AS genre
-			FROM user_history uh
-			JOIN movies m ON uh.media_id = m.id
-			WHERE uh.user_id = ? AND uh.media_type = 'movie' AND m.genres IS NOT NULL
-			UNION ALL
-			-- Show watch history (via episodes)
-			SELECT jsonb_array_elements_text(s.genres) AS genre
-			FROM user_history uh
-			JOIN episodes e ON uh.media_id = e.id
-			JOIN shows s ON e.show_id = s.id
-			WHERE uh.user_id = ? AND uh.media_type = 'episode' AND s.genres IS NOT NULL
-			UNION ALL
-			-- Movie favorites
-			SELECT jsonb_array_elements_text(m.genres) AS genre
-			FROM user_favorites uf
-			JOIN movies m ON uf.media_id = m.id
-			WHERE uf.user_id = ? AND uf.media_type = 'movie' AND m.genres IS NOT NULL
-			UNION ALL
-			-- Show favorites
-			SELECT jsonb_array_elements_text(s.genres) AS genre
-			FROM user_favorites uf
-			JOIN shows s ON uf.media_id = s.id
-			WHERE uf.user_id = ? AND uf.media_type = 'show' AND s.genres IS NOT NULL
-			UNION ALL
-			-- Movie ratings
-			SELECT jsonb_array_elements_text(m.genres) AS genre
-			FROM user_ratings ur
-			JOIN movies m ON ur.media_id = m.id
-			WHERE ur.user_id = ? AND ur.media_type = 'movie' AND m.genres IS NOT NULL
-			UNION ALL
-			-- Show ratings
-			SELECT jsonb_array_elements_text(s.genres) AS genre
-			FROM user_ratings ur
-			JOIN shows s ON ur.media_id = s.id
-			WHERE ur.user_id = ? AND ur.media_type = 'show' AND s.genres IS NOT NULL
-		) all_genres
-		WHERE genre IS NOT NULL AND genre != ''
-		GROUP BY genre
-		ORDER BY cnt DESC
-		LIMIT ?
-	`
-
-	type genreRow struct {
-		Genre string
-		Cnt   int
-	}
-
-	var rows []genreRow
-	if err := db.Raw(sql, userID, userID, userID, userID, userID, userID, n).Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-
-	genres := make([]string, 0, len(rows))
-	for _, r := range rows {
-		genres = append(genres, r.Genre)
-	}
-	if genres == nil {
-		genres = make([]string, 0)
-	}
-	return genres, nil
-}
-
-// ---------------------------------------------------------------------------
-// Cached fetchTopGenres
-// ---------------------------------------------------------------------------
-
-// topGenresCacheTTL bounds how long a per-user top-genres result is served from
-// Redis. Version-keying the entry means a history/favorites/ratings write that
-// bumps the user version counter invalidates the result immediately (O(1)); the
-// TTL is a backstop for the version counter expiring.
-const topGenresCacheTTL = 30 * time.Minute
-
-func topGenresCacheKey(userID string, version int64) string {
-	return fmt.Sprintf("recommendations:topgenres:%s:v%d", userID, version)
-}
-
-// fetchTopGenresCached returns the user's top N genres, serving from Redis when
-// a fresh version-keyed entry exists and computing from the DB otherwise. It is
-// best-effort: on Redis unavailability or version-fetch failure it falls through
-// to the DB scan and never fails the request.
-func fetchTopGenresCached(db *gorm.DB, userID string, n int) ([]string, error) {
-	if projredis.GetClient() != nil {
-		if version, err := cache.GetUserVersion(userID); err == nil {
-			key := topGenresCacheKey(userID, version)
-			if genres, ok := getCachedTopGenres(key); ok {
-				return genres, nil
-			}
-			genres, err := fetchTopGenres(db, userID, n)
-			if err != nil {
-				return nil, err
-			}
-			setCachedTopGenres(key, genres)
-			return genres, nil
-		}
-	}
-	return fetchTopGenres(db, userID, n)
-}
-
-func getCachedTopGenres(key string) ([]string, bool) {
-	data, err := projredis.GetCacheData(key)
-	if err != nil {
-		return nil, false
-	}
-	var genres []string
-	if err := json.Unmarshal(data, &genres); err != nil {
-		log.Printf("[recommendations] cache unmarshal error for key %s: %v", key, err)
-		return nil, false
-	}
-	return genres, true
-}
-
-func setCachedTopGenres(key string, genres []string) {
-	data, err := json.Marshal(genres)
-	if err != nil {
-		log.Printf("[recommendations] cache marshal error for key %s: %v", key, err)
-		return
-	}
-	if err := projredis.SetCacheData(key, data, topGenresCacheTTL); err != nil {
-		log.Printf("[recommendations] cache set error for key %s: %v", key, err)
-	}
-}
-
-// ============================================================================
-// ERROR HELPERS
-// ============================================================================

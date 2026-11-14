@@ -1,6 +1,7 @@
 package tmdb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,6 +85,12 @@ func (c *Client) authHeader() string { return "Bearer " + c.token }
 
 // do performs a TMDB request and returns the raw response.
 func (c *Client) do(method, path string, params url.Values) (*http.Response, error) {
+	return c.doWithContext(context.Background(), method, path, params)
+}
+
+// doWithContext is do() bound to a caller's context, so a cancelled request
+// stops waiting on the provider instead of running out the client timeout.
+func (c *Client) doWithContext(ctx context.Context, method, path string, params url.Values) (*http.Response, error) {
 	u, err := url.Parse(c.baseURL + path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
@@ -92,7 +99,7 @@ func (c *Client) do(method, path string, params url.Values) (*http.Response, err
 		u.RawQuery = params.Encode()
 	}
 
-	req, err := http.NewRequest(method, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -506,4 +513,51 @@ func (c *Client) GetTVCertifications() (*CertificationsResponse, error) {
 		return nil, err
 	}
 	return decode[CertificationsResponse](resp)
+}
+
+// GetMovieRecommendationsContext is GetMovieRecommendations for a caller with a
+// context; the context is what lets a cancelled page request stop the fetch.
+func (c *Client) GetMovieRecommendationsContext(ctx context.Context, id, page int) (*Paginated[MovieListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doWithContext(ctx, "GET", fmt.Sprintf("/movie/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[MovieListItem]](resp)
+}
+
+// GetShowRecommendationsContext is GetMovieRecommendationsContext for TV.
+func (c *Client) GetShowRecommendationsContext(ctx context.Context, id, page int) (*Paginated[TVListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doWithContext(ctx, "GET", fmt.Sprintf("/tv/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[TVListItem]](resp)
+}
+
+// GetMovieRecommendations returns TMDB's own "recommended from this title" list
+// (v3 /movie/{id}/recommendations).
+//
+// This is the graph haaku leans on when an instance has no viewing history of
+// its own: the provider's related-title edges are the same ones a user would
+// see on TMDB, and the local catalogue engine then scores them against what the
+// instance actually holds.
+func (c *Client) GetMovieRecommendations(id, page int) (*Paginated[MovieListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doV3("GET", fmt.Sprintf("/movie/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[MovieListItem]](resp)
+}
+
+// GetShowRecommendations is GetMovieRecommendations for TV (/tv/{id}/recommendations).
+func (c *Client) GetShowRecommendations(id, page int) (*Paginated[TVListItem], error) {
+	p := url.Values{"page": {fmt.Sprintf("%d", page)}}
+	resp, err := c.doV3("GET", fmt.Sprintf("/tv/%d/recommendations", id), p)
+	if err != nil {
+		return nil, err
+	}
+	return decode[Paginated[TVListItem]](resp)
 }

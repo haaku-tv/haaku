@@ -11,7 +11,7 @@ path (modulo our `/v1` prefix), with a real 2xx — except the recommendation/re
 engine, which stays an honest `501 not_implemented` and graded `blocked-engine` by
 the owner's carve-out. Done is `go run ./cmd/parity`, not a PR count.
 
-Contract operations: **336**. Not yet served (**in scope**): **63**. Out by owner decision: **33**. Served today: **240**.
+Contract operations: **336**. Not yet served (**in scope**): **57**. Out by owner decision: **33**. Served today: **246**.
 
 ## Out of scope (owner decisions, re-affirmed)
 
@@ -59,8 +59,6 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 
 | Contract operation | Status | Group | Owner |
 |---|---|---|---|
-| `DELETE /recommendations/movies/{id}` | blocked-engine | related / recommendations (owner carve-out: stays 501) | #49 |
-| `DELETE /recommendations/shows/{id}` | blocked-engine | related / recommendations (owner carve-out: stays 501) | #49 |
 | `DELETE /users/requests/{id}` | out-of-scope | follow requests (blocked on #54) | #110 |
 | `GET /calendars/{target}/media/{start_date}/{days}` | out-of-scope | calendars and Watch Now data | #69 |
 | `GET /calendars/{target}/shows/finales/{start_date}/{days}` | out-of-scope | calendars and Watch Now data | #69 |
@@ -74,16 +72,12 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /comments/{id}/replies` | divergent | comment moderation, reactions and the note item read | #107 |
 | `GET /lists/{id}/comments/{sort}` | divergent | list management — writes, items, smart lists | #105 |
 | `GET /lists/{id}/items/{type}/{sort_by}/{sort_how}` | divergent | list management — writes, items, smart lists | #105 |
-| `GET /movies/{id}/related` | blocked-engine | related / recommendations (owner carve-out: stays 501) | #49 |
 | `GET /movies/{id}/stats` | divergent | per-item reads over stored data | #86 |
 | `GET /movies/{id}/studios` | divergent | TMDB metadata ingest | #68 |
 | `GET /oauth/authorize` | divergent | divergent shapes — serve the contract path | #104 |
 | `GET /people/{id}/` | out-of-scope | TMDB metadata ingest | #68 |
-| `GET /recommendations/movies/` | out-of-scope | related / recommendations (owner carve-out: stays 501) | #49 |
-| `GET /recommendations/shows/` | out-of-scope | related / recommendations (owner carve-out: stays 501) | #49 |
 | `GET /search/{type}` | divergent | search engine | #70 |
 | `GET /shows/streaming/{period}` | blocked-data | calendars and Watch Now data | #69 |
-| `GET /shows/{id}/related` | blocked-engine | related / recommendations (owner carve-out: stays 501) | #49 |
 | `GET /shows/{id}/seasons/{season}` | divergent | divergent shapes — serve the contract path | #104 |
 | `GET /shows/{id}/seasons/{season}/episodes/{episode}` | divergent | divergent shapes — serve the contract path | #104 |
 | `GET /shows/{id}/stats` | divergent | per-item reads over stored data | #86 |
@@ -133,6 +127,8 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `DELETE /comments/{id}/reactions/{reaction_type}` | `DELETE /v1/comments/{id}/reactions/{reaction_type}` |
 | `DELETE /lists/{id}/like` | `DELETE /v1/lists/{id}/like` |
 | `DELETE /notes/{id}` | `DELETE /v1/notes/{id}` |
+| `DELETE /recommendations/movies/{id}` | `DELETE /v1/recommendations/movies/{id}` |
+| `DELETE /recommendations/shows/{id}` | `DELETE /v1/recommendations/shows/{id}` |
 | `DELETE /shows/{id}/progress/watched/reset` | `DELETE /v1/shows/{id}/progress/watched/reset` |
 | `DELETE /sync/playback/{id}` | `DELETE /v1/sync/playback/{id}` |
 | `DELETE /users/{id}/block` | `DELETE /v1/users/{id}/block` |
@@ -188,6 +184,7 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /movies/{id}/lists/{type}/{sort}` | `GET /v1/movies/{id}/lists/{type}/{sort}` |
 | `GET /movies/{id}/people` | `GET /v1/movies/{id}/people` |
 | `GET /movies/{id}/ratings` | `GET /v1/movies/{id}/ratings` |
+| `GET /movies/{id}/related` | `GET /v1/movies/{id}/related` |
 | `GET /movies/{id}/releases/{country}` | `GET /v1/movies/{id}/releases/{country}` |
 | `GET /movies/{id}/translations` | `GET /v1/movies/{id}/translations` |
 | `GET /movies/{id}/videos` | `GET /v1/movies/{id}/videos` |
@@ -202,6 +199,8 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /people/{id}/lists/{type}/{sort}` | `GET /v1/people/{id}/lists/{type}/{sort}` |
 | `GET /people/{id}/movies` | `GET /v1/people/{id}/movies` |
 | `GET /people/{id}/shows` | `GET /v1/people/{id}/shows` |
+| `GET /recommendations/movies/` | `GET /v1/recommendations/movies` |
+| `GET /recommendations/shows/` | `GET /v1/recommendations/shows` |
 | `GET /search/recent_by_id/global/{type}` | `GET /v1/search/recent_by_id/global/{type}` |
 | `GET /search/{id_type}/{id}` | `GET /v1/search/{id_type}/{id}` |
 | `GET /search/{type}/exact` | `GET /v1/search/{type}/exact` |
@@ -226,6 +225,7 @@ re-audit. They are declined for a stated reason, never to make a number look goo
 | `GET /shows/{id}/progress/collection` | `GET /v1/shows/{id}/progress/collection` |
 | `GET /shows/{id}/progress/watched` | `GET /v1/shows/{id}/progress/watched` |
 | `GET /shows/{id}/ratings` | `GET /v1/shows/{id}/ratings` |
+| `GET /shows/{id}/related` | `GET /v1/shows/{id}/related` |
 | `GET /shows/{id}/seasons` | `GET /v1/shows/{id}/seasons` |
 | `GET /shows/{id}/seasons/{season}/comments/{sort}` | `GET /v1/shows/{id}/seasons/{season}/comments/{sort}` |
 | `GET /shows/{id}/seasons/{season}/episodes/{episode}/comments/{sort}` | `GET /v1/shows/{id}/seasons/{season}/episodes/{episode}/comments/{sort}` |

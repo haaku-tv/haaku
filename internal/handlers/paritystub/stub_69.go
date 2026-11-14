@@ -12,10 +12,10 @@ import (
 // that haaku does not serve yet. Each answers an honest 501 naming the blocker and the
 // tracking issue, so a Trakt client gets a real answer instead of a 404.
 func registerStub69(api fiber.Router) {
-	// GET /shows/streaming/{period} — blocked-data: STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider catalogue is undated country availability, so a show's streaming period cannot be derived without inventing a date.
+	// GET /shows/streaming/{period} — blocked-data: Driven by streaming release dates, which are not stored (see /calendars/all/streaming).
 	// Upstream getstreaming; 200: array of {delta,rank,show}; path: period; +23 query
 	// Tracked in #69: https://github.com/haaku-tv/haaku/issues/69
-	api.Get("/v1/shows/streaming/:period", stubHandler(69, "GET /shows/streaming/{period}", "STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider catalogue is undated country availability, so a show's streaming period cannot be derived without inventing a date."))
+	api.Get("/v1/shows/streaming/:period", stubHandler(69, "GET /shows/streaming/{period}", "Driven by streaming release dates, which are not stored (see /calendars/all/streaming)."))
 }
 
 // defsStub69 is the registry entry for each stub above. The 501 in
@@ -29,7 +29,7 @@ func defsStub69() []openapi.RouteDef {
 			Summary:     "Parity stub — not implemented (calendars & Watch Now data)",
 			Tags:        []string{"Shows"},
 			Auth:        "none",
-			StatusCodes: map[int]string{501: "Not implemented — STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider cat (#69)"},
+			StatusCodes: map[int]string{501: "Not implemented — Driven by streaming release dates, which are not stored (see /calendars/all/streaming). (#69)"},
 		},
 	}
 }

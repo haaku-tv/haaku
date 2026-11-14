@@ -6750,12 +6750,14 @@ paths:
         get:
             operationId: _v1_movies_id_related_GET
             responses:
+                "200":
+                    description: Related movies
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
@@ -6792,16 +6794,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: 'Not implemented — recommendations engine (issue #49) (#49)'
             security: []
-            summary: Parity stub — not implemented (item-to-item related/recommendation engine)
+            summary: Get movies related to this one
             tags:
-                - Movies
+                - Discovery
     /v1/movies/{id}/releases/{country}:
         get:
             operationId: _v1_movies_id_releases_country_GET
@@ -7739,7 +7735,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
@@ -7776,14 +7772,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: Not implemented (requires recommendations engine)
             security: []
-            summary: Get movie recommendations
+            summary: Get movies like this one
             tags:
                 - Discovery
     /v1/movies/streaming/{period}:
@@ -9028,18 +9018,20 @@ paths:
         delete:
             operationId: _v1_recommendations_movies_id_DELETE
             responses:
+                "204":
+                    description: Dismissed
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: unauthorized
+                    description: Unauthorized
                 "404":
                     content:
                         application/json:
@@ -9070,16 +9062,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: 'Not implemented — recommendations engine (issue #49) (#49)'
             security:
                 - apiKey: []
                 - oauth: []
-            summary: Parity stub — not implemented (item-to-item related/recommendation engine)
+            summary: Dismiss a movie from the recommendations
             tags:
                 - Recommendations
     /v1/recommendations/shows:
@@ -9140,18 +9126,20 @@ paths:
         delete:
             operationId: _v1_recommendations_shows_id_DELETE
             responses:
+                "204":
+                    description: Dismissed
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: unauthorized
+                    description: Unauthorized
                 "404":
                     content:
                         application/json:
@@ -9182,16 +9170,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: 'Not implemented — recommendations engine (issue #49) (#49)'
             security:
                 - apiKey: []
                 - oauth: []
-            summary: Parity stub — not implemented (item-to-item related/recommendation engine)
+            summary: Dismiss a show from the recommendations
             tags:
                 - Recommendations
     /v1/reports:
@@ -10971,12 +10953,14 @@ paths:
         get:
             operationId: _v1_shows_id_related_GET
             responses:
+                "200":
+                    description: Related shows
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
@@ -11013,16 +10997,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: 'Not implemented — recommendations engine (issue #49) (#49)'
             security: []
-            summary: Parity stub — not implemented (item-to-item related/recommendation engine)
+            summary: Get shows related to this one
             tags:
-                - Shows
+                - Discovery
     /v1/shows/{id}/report:
         post:
             operationId: _v1_shows_id_report_POST
@@ -13244,7 +13222,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: invalid request
+                    description: Invalid id
                 "401":
                     content:
                         application/json:
@@ -13281,14 +13259,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
                     description: internal server error
-                "501":
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ErrorEnvelope'
-                    description: Not implemented (requires recommendations engine)
             security: []
-            summary: Get show recommendations
+            summary: Get shows like this one
             tags:
                 - Discovery
     /v1/shows/streaming/{period}:
@@ -13342,7 +13314,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorEnvelope'
-                    description: 'Not implemented — STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider cat (#69)'
+                    description: Not implemented — Driven by streaming release dates, which are not stored (see /calendars/all/streaming). (#69)
             security: []
             summary: Parity stub — not implemented (calendars & Watch Now data)
             tags:
