@@ -4,6 +4,22 @@
 
 Implements lists, list items, likes, comments, popular/trending, and smart lists (21 OpenAPI routes). This is the largest handler module and the one that most consistently applies the cache/outbox conventions.
 
+**Response shape**
+
+Every route that serves a list serves the **contract's list object**
+(`contractshape.ListWithItemCount`): `ids.trakt` (the list row id), `ids.slug`,
+`item_count` (counted, not fabreed), `likes`, `comment_count`, `user`. The native
+handlers used to answer the stored `database.List` row, which carries no `ids` at
+all — the web client is typed on the contract object, so `list.ids.trakt` threw
+and the My Lists page died, while `/users/me/lists/collaborations` (which already
+used the contract builder) rendered fine. Owners and item counts are fetched in
+one batched query each (`contractListObjects`), never per row.
+
+List **items** are served in the contract's item shape
+(`contractListItemObjects`): `{rank, id, listed_at, type, movie|show|season|episode}`,
+where `id` is the **join-row** id — the value remove/reorder accept — and the
+media id lives inside the nested object only.
+
 **List CRUD**
 - `GET /users/{id}/lists` — user's lists, privacy-filtered (public+link_only for non-owners) and
   profile-gated: `auth.AuthRequired()` then `auth.PrivacyFilter("id")`, so a private profile's
@@ -16,9 +32,17 @@ Implements lists, list items, likes, comments, popular/trending, and smart lists
 - `PUT /lists/{id}` / `DELETE /lists/{id}` — owner-only; advisory-locked cache-tx writes.
 
 **List items**
-- `GET /lists/{id}/items` — paginated; sorted per list `sort_by`/`sort_how`; `type` filter; `extended` embeds the list.
-- `POST /lists/{id}/items` — add movies/shows/seasons/episodes by TMDB id (resolved via `ExternalID`); reports `added`/`not_found`/`duplicate`.
-- `POST /lists/{id}/items/remove` — remove by item ID or by movie/show TMDB ref.
+- `GET /users/me/lists/containing` — **reverse index for a media page**: the caller's own lists
+  that hold one `?type=&media_id=` item, as contract list objects (`[]` when none, 400 on a bad
+  type or a non-positive id). Owner-only lists on purpose: item writes are owner-only, so a list
+  the caller merely collaborates on could not be toggled from where this read is used.
+- `GET /lists/{id}/items` — paginated; sorted per list `sort_by`/`sort_how`; `type` filter;
+  contract item objects (see *Response shape*).
+- `POST /lists/{id}/items` — add movies/shows/seasons/episodes by `ids.trakt` (our own row id,
+  what the API serves and what clients echo back), then `ids.tmdb`→`ExternalID`, then `ids.imdb`
+  (`resolveContractMedia`, shared with the contract path); reports `added`/`not_found`/`duplicate`.
+  Reading only `ids.tmdb` is why "Add" from a media page answered 201 and added nothing.
+- `POST /lists/{id}/items/remove` — remove by item ID or by the same media reference.
 - `PUT /lists/{id}/items/reorder` — assigns rank by array position; marks list ranked.
 
 **Likes / comments / discovery**
@@ -42,7 +66,9 @@ Writes go through `cache.WithCacheTransaction` with list/user version-key bumps 
 | Cache-tx + advisory list lock on writes | Done |
 | List/user version-key invalidation | Done |
 | Outbox events on list changes | Done |
-| Add/remove/reorder items (TMDB resolution, dupes) | Done |
+| Add/remove/reorder items (local-row/tmdb/imdb resolution, dupes) | Done |
+| Contract list + item response shapes on every route | Done |
+| Media-page membership read (`/users/me/lists/containing`) | Done |
 | Like/unlike with counter maintenance | Done |
 | Popular (period) + trending | Done |
 | Smart list CRUD + ownership | Done |
@@ -73,6 +99,9 @@ Writes go through `cache.WithCacheTransaction` with list/user version-key bumps 
 - [x] Ensure unique constraint exists for list likes; consider a DB-level check. (Batch 12 — VERIFIED: no DB change needed.) `list_likes` (migration 0019) declares `PRIMARY KEY (list_id, user_id)`, and the GORM `ListLike` model mirrors it with composite primary keys on `(ListID, UserID)`. So a duplicate like is rejected at the DB level regardless of the handler's `OnConflict{DoNothing}` — the PK guarantees a user cannot like the same list twice, so `like_count` can never be inflated by a missing constraint. Confirmed; no schema change required.)
 - [x] Replace local error helpers with `internal/response` (Batch 0).
 - [x] Replace local `authRequired`/`requireAuth` with `auth.AuthRequired` (Batch 1).
-- [ ] Consider response mapping for `database.List` leaks in likes/popular/trending/items-extended.
+- [x] Response mapping for `database.List` leaks: every list route now serves the contract
+  object (popular/trending included), and items serve the contract item object. The item read
+  no longer offers `extended` — the list object is one `GET /lists/{id}` away, and the item
+  payload is the same shape either way.
 - [x] Verify the `genres::jsonb ? ?` filter matches the column type. (Batch 12 — VERIFIED: yes.) The smart-list `genres` filter runs against the movies/shows tables, whose `genres` columns are `JSONB DEFAULT '[]'` (migration 0002; GORM `StringSlice` with `type:jsonb`). The PostgreSQL `?` operator on a jsonb **array** tests whether the given text is an element of the array — exactly the containment semantics the DSL wants ("media has this genre"), and matches how ingest stores genres (a JSON array of genre names, e.g. `["Science Fiction","Drama"]`). The explicit `::jsonb` cast is redundant-but-harmless (the column is already jsonb). Confirmed correct against the column type; no change needed. Note: values compared are the stored genre *names*, not the `/genres` slugs — see `reference.md` Batch 12 slug-strategy note.)
 - [ ] Verify module test coverage (`make test`).

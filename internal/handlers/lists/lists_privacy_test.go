@@ -48,10 +48,13 @@ func listsPrivacyDB(t *testing.T) *gorm.DB {
 		&database.UserFollow{},
 		&database.UserBlock{},
 		&database.List{},
+		// The list collection now reports a real item_count from list_items, so
+		// the fixture has to create that table too.
+		&database.ListItem{},
 	); err != nil {
 		t.Fatalf("migrate test DB: %v", err)
 	}
-	for _, table := range []string{"users", "user_follows", "user_blocks", "lists"} {
+	for _, table := range []string{"users", "user_follows", "user_blocks", "lists", "list_items"} {
 		if err := db.Exec("DELETE FROM " + table).Error; err != nil {
 			t.Fatalf("clear %s: %v", table, err)
 		}
