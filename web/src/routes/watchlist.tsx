@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { Grid3X3, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useRemoveFromWatchlist, useWatchlist } from '@/api/hooks'
@@ -39,10 +39,12 @@ const typeMap: Record<MediaTypeFilter, string | undefined> = {
  * silently do the same thing.
  */
 const SORT_OPTIONS = [
-  { value: 'rank', label: 'Rank' },
-  { value: 'title', label: 'Title' },
-  { value: 'added', label: 'Recently added' },
-  { value: 'listed', label: 'Recently listed' },
+  { value: 'rank', label: 'Rank', how: 'asc' },
+  { value: 'title', label: 'Title', how: 'asc' },
+  // The handler's default direction is ascending, which on a timestamp means
+  // the oldest entries first — the opposite of what these two labels promise.
+  { value: 'added', label: 'Recently added', how: 'desc' },
+  { value: 'listed', label: 'Recently listed', how: 'desc' },
 ] as const
 
 function WatchlistPage() {
@@ -51,9 +53,13 @@ function WatchlistPage() {
   const [sortBy, setSortBy] = useState<string>('rank')
   const [page, setPage] = useState(1)
 
+  const sortHow =
+    SORT_OPTIONS.find((option) => option.value === sortBy)?.how ?? 'asc'
+
   const { data, isLoading, isError } = useWatchlist({
     type: typeMap[mediaType],
     sortBy,
+    sortHow,
     page,
     limit: 24,
   })
@@ -141,11 +147,15 @@ function WatchlistPage() {
           />
         ) : items.length === 0 ? (
           <EmptyState
-            title="Your watchlist is empty"
+            title={
+              mediaType === 'all'
+                ? 'Your watchlist is empty'
+                : `No ${mediaType} on your watchlist`
+            }
             body={
               mediaType === 'all'
                 ? 'Browse trending shows and movies to find something to watch.'
-                : `No ${mediaType} on your watchlist yet.`
+                : `You have other titles saved — switch back to “Everything” to see them.`
             }
           />
         ) : (
@@ -244,7 +254,6 @@ function WatchlistCard({
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
-  const navigate = useNavigate()
   return (
     <div className="glass flex flex-col items-center gap-4 rounded-[var(--sf-radius-lg)] px-6 py-14 text-center">
       <span className="grid size-14 place-items-center rounded-full bg-sf-accent/12 text-sf-accent-2">
@@ -252,13 +261,11 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       </span>
       <h3 className="font-display text-xl font-bold text-sf-ink">{title}</h3>
       <p className="max-w-sm text-sm text-sf-ink-muted">{body}</p>
-      <Button
-        size="sm"
-        variant="glass"
-        onClick={() => navigate({ to: '/search' })}
-      >
-        <Search className="size-4" />
-        Find something
+      <Button size="sm" variant="glass" asChild>
+        <Link to="/search">
+          <Search className="size-4" />
+          Find something
+        </Link>
       </Button>
     </div>
   )

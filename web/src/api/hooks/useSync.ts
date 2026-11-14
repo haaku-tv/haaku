@@ -50,6 +50,8 @@ export function useWatchlist(params?: {
   type?: string
   /** One of rank, listed, added, title — the values /v1/sync/watchlist sorts by. */
   sortBy?: string
+  /** asc | desc. The handler defaults to asc, which is the wrong end for "recently". */
+  sortHow?: 'asc' | 'desc'
 }) {
   const api = useApi()
 
@@ -71,6 +73,7 @@ export function useWatchlist(params?: {
       // `sort_by`, not `sort`: the handler reads the contract's parameter name
       // and silently falls back to rank order for anything else.
       if (params?.sortBy) searchParams.sort_by = params.sortBy
+      if (params?.sortHow) searchParams.sort_how = params.sortHow
 
       const res = await api.GET('/v1/sync/watchlist', {
         params: { query: searchParams as Record<string, never> },
