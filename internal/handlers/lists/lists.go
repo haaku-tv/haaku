@@ -193,21 +193,21 @@ func handleGetListsContaining(c *fiber.Ctx) error {
 		return response.InternalError(c)
 	}
 
-	var listIDs []int64
-	if err := db.Model(&database.ListItem{}).
-		Where("media_type = ? AND media_id = ?", mediaType, mediaID).
-		Pluck("list_id", &listIDs).Error; err != nil {
-		return response.InternalError(c)
-	}
-	if len(listIDs) == 0 {
-		return c.JSON(make([]map[string]any, 0))
-	}
-
+	// Owner-scoped in the JOIN, not after it: a widely listed title matches rows
+	// from every user, and filtering afterwards pulls that whole set into the
+	// process for a caller who may own none of it.
 	var lists []database.List
-	if err := db.Where("user_id = ? AND id IN ?", uid, listIDs).
-		Order("sort_order ASC, created_at DESC").
+	if err := db.Model(&database.List{}).
+		Joins("JOIN list_items ON list_items.list_id = lists.id").
+		Where("lists.user_id = ? AND list_items.media_type = ? AND list_items.media_id = ?",
+			uid, mediaType, mediaID).
+		Order("lists.sort_order ASC, lists.created_at DESC").
 		Find(&lists).Error; err != nil {
 		return response.InternalError(c)
+	}
+
+	if lists == nil {
+		return c.JSON(make([]map[string]any, 0))
 	}
 
 	out, err := contractListObjects(db, lists)

@@ -15,6 +15,7 @@ import type {
   ReorderListItemPayload,
   SearchResult,
   SmartList,
+  SmartListItem,
   TraktList,
   TrendingList,
   UpdateListPayload,
@@ -579,13 +580,13 @@ export function useSmartListItems(
 ) {
   return useQuery({
     queryKey: listKeys.smartItems(id, page),
-    queryFn: async (): Promise<ListItem[]> => {
+    queryFn: async (): Promise<SmartListItem[]> => {
       const api = requireClient(client)
       const { data, error } = await api.GET('/v1/smart-lists/{id}/items', {
         params: { path: { id: String(id) }, query: { page, limit } },
       } as never)
       if (error) throw error
-      return rowsOf<ListItem>(data)
+      return rowsOf<SmartListItem>(data)
     },
     enabled: !!client && !!id,
   })

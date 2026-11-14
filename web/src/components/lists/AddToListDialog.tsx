@@ -65,7 +65,11 @@ export function AddToListDialog({
   const mediaID = localRowID(ids)
 
   const { data: lists, isLoading } = useMyLists(api)
-  const { data: memberOf } = useListMembership(api, kind, mediaID)
+  const {
+    data: memberOf,
+    isLoading: memberLoading,
+    isError: memberError,
+  } = useListMembership(api, kind, mediaID)
   const addToList = useAddToList(api)
   const removeFromList = useRemoveFromList(api)
   const createList = useCreateList(api)
@@ -106,6 +110,9 @@ export function AddToListDialog({
   }
 
   const createAndAdd = () => {
+    // Enter in the input bypasses the button's disabled state, so the pending
+    // check has to live here too or a double Enter creates the list twice.
+    if (createList.isPending) return
     const name = newName.trim()
     if (!name) return
     createList.mutate(
@@ -145,6 +152,18 @@ export function AddToListDialog({
             />
           </div>
 
+          {memberLoading && (
+            <p className="text-xs text-sf-ink-faint">
+              Checking which lists already have this title…
+            </p>
+          )}
+          {memberError && (
+            <p className="text-xs text-red-300">
+              Could not read your lists for this title — close and reopen to
+              retry.
+            </p>
+          )}
+
           {isLoading ? (
             <div className="py-6 text-center text-sm text-sf-ink-muted">
               Loading your lists…
@@ -161,12 +180,16 @@ export function AddToListDialog({
                 const id = listRowID(list)
                 const isMember = memberIDs.has(id)
                 const isBusy = busyList === id
+                // Until membership resolves every row would render unchecked,
+                // including lists that already hold this title.
+                const blocked = isBusy || memberLoading || memberError
                 return (
                   <button
                     key={id}
                     type="button"
                     onClick={() => toggle(list)}
-                    disabled={isBusy}
+                    disabled={blocked}
+                    aria-pressed={isMember}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors',
                       isMember

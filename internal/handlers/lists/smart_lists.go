@@ -310,10 +310,12 @@ func resolveSmartListQuery(db *gorm.DB, filters database.JSONMap, userID, mediaT
 			q = applyFilterDSL(q, filters, "movies")
 			q = applyUserFilters(q, filters, userID, "movie")
 
-			// Fetch the full (ordered) match set for this type — no per-type
-			// OFFSET/LIMIT — so pagination can be applied over the combined
-			// result set below instead of per table.
-			if err := q.Order(fmt.Sprintf("%s DESC", sanitizeSortColumn(sortBy))).
+			// Fetch only the rows the requested page of the COMBINED set can
+			// reach: every row up to the end of this page, per type, with no
+			// per-type OFFSET (the page is sliced from the combined result, so
+			// each type has to contribute its top page*limit rows).
+			if err := q.Order(fmt.Sprintf("%s DESC, id ASC", sanitizeSortColumn(sortBy))).
+				Limit(page * limit).
 				Find(&movies).Error; err != nil {
 				return nil, 0, err
 			}
@@ -343,7 +345,8 @@ func resolveSmartListQuery(db *gorm.DB, filters database.JSONMap, userID, mediaT
 			q = applyFilterDSL(q, filters, "shows")
 			q = applyUserFilters(q, filters, userID, "show")
 
-			if err := q.Order(fmt.Sprintf("%s DESC", sanitizeSortColumn(sortBy))).
+			if err := q.Order(fmt.Sprintf("%s DESC, id ASC", sanitizeSortColumn(sortBy))).
+				Limit(page * limit).
 				Find(&shows).Error; err != nil {
 				return nil, 0, err
 			}
@@ -466,12 +469,23 @@ func applyFilterDSL(query *gorm.DB, filters database.JSONMap, tableAlias string)
 }
 
 // applyUserFilters applies watched/collected filters against user_* tables.
+// userFilterTables maps a media type to the table the outer query selects, which
+// the EXISTS subqueries must reference. Using the TYPE ("movie") instead of the
+// table ("movies") produced a correlated reference to a table that is not in the
+// FROM list, so every watched/collected filter errored on PostgreSQL.
+var userFilterTables = map[string]string{"movie": "movies", "show": "shows"}
+
 func applyUserFilters(query *gorm.DB, filters database.JSONMap, userID, mediaType string) *gorm.DB {
+	table, ok := userFilterTables[mediaType]
+	if !ok {
+		return query
+	}
+
 	// Watched filter
 	if rawWatched, ok := filters["watched"]; ok {
 		if watched, ok := rawWatched.(string); ok {
 			subQuery := fmt.Sprintf(
-				"SELECT 1 FROM user_history WHERE user_history.user_id = ? AND user_history.media_type = ? AND user_history.media_id = %s.id", mediaType)
+				"SELECT 1 FROM user_history WHERE user_history.user_id = ? AND user_history.media_type = ? AND user_history.media_id = %s.id", table)
 			switch watched {
 			case "all":
 				query = query.Where(fmt.Sprintf("EXISTS (%s)", subQuery), userID, mediaType)
@@ -485,7 +499,7 @@ func applyUserFilters(query *gorm.DB, filters database.JSONMap, userID, mediaTyp
 	if rawCollected, ok := filters["collected"]; ok {
 		if collected, ok := rawCollected.(string); ok {
 			subQuery := fmt.Sprintf(
-				"SELECT 1 FROM user_collection WHERE user_collection.user_id = ? AND user_collection.media_type = ? AND user_collection.media_id = %s.id", mediaType)
+				"SELECT 1 FROM user_collection WHERE user_collection.user_id = ? AND user_collection.media_type = ? AND user_collection.media_id = %s.id", table)
 			switch collected {
 			case "all":
 				query = query.Where(fmt.Sprintf("EXISTS (%s)", subQuery), userID, mediaType)

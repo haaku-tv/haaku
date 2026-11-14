@@ -108,6 +108,22 @@ export interface ReorderListItemPayload {
   rank: number[]
 }
 
+// ─── Smart list items ────────────────────────────────────
+/**
+ * SmartListItem is what `GET /smart-lists/{id}/items` actually serves: a flat
+ * resolved-media row, not a stored list_items row. It has no rank/listed_at and
+ * no nested movie/show, so typing it as ListItem would hand a future caller
+ * fields that are not there.
+ */
+export interface SmartListItem {
+  type: 'movie' | 'show'
+  movie_id?: number
+  show_id?: number
+  title: string
+  year: number
+  rating: number
+}
+
 // ─── Comments ────────────────────────────────────────────
 export interface ListComment {
   id: number
