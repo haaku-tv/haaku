@@ -97,7 +97,13 @@ function HomePage() {
     if (card.to) navigate({ to: card.to.to, params: { id: card.to.id } })
   }
 
+  // Every row that can render counts: an account with playback progress but an
+  // empty catalogue still has something on the page, and telling it the
+  // catalogue is empty next to "Continue Watching" contradicts itself.
   const rows =
+    continueWatching.length +
+    personalized.length +
+    friends.length +
     whatsShowing.length +
     popular.length +
     lists.length +
