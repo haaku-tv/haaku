@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haaku-tv/haaku/internal/auth"
 	"github.com/haaku-tv/haaku/internal/database"
 	"github.com/haaku-tv/haaku/internal/openapi"
 	"github.com/haaku-tv/haaku/internal/response"
@@ -45,6 +46,14 @@ const (
 	deviceCodeLength   = 32
 	userCodeCharset    = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
+	// Token prefixes exist so the API can tell an OAuth access token from a
+	// Clerk JWT, an API key or a local session token before it hits the store.
+	// Without one, an issued token was indistinguishable from garbage: the
+	// middleware rejected it as an unsupported prefix, which is why a token
+	// could be minted and then authenticate nothing.
+	accessTokenPrefix  = "hoa_"
+	refreshTokenPrefix = "hor_"
+
 	accessTokenTTL     = 7 * 24 * time.Hour
 	refreshTokenTTL    = 90 * 24 * time.Hour
 	authCodeTTL        = 10 * time.Minute
@@ -73,10 +82,13 @@ func init() {
 
 func registerOpenAPIRoutes() {
 	routes := []openapi.RouteDef{
+		{Method: "GET", Path: "/oauth/applications", Summary: "List the caller's OAuth2 applications", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{200: "Applications", 401: "Unauthorized"}},
 		{Method: "POST", Path: "/oauth/applications", Summary: "Register a new OAuth2 application", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{201: "Client created", 400: "Invalid request"}},
+		{Method: "DELETE", Path: "/oauth/applications/{id}", Summary: "Delete an application and revoke its tokens", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{204: "Deleted", 401: "Unauthorized"}},
 		{Method: "GET", Path: "/oauth/authorize", Summary: "OAuth2 authorization endpoint (authorization code + PKCE)", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{302: "Redirect with authorization code", 400: "Invalid parameters"}},
 		{Method: "POST", Path: "/oauth/token", Summary: "OAuth2 token endpoint", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token response", 400: "Invalid grant"}},
 		{Method: "POST", Path: "/oauth/revoke", Summary: "Revoke an OAuth2 token", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token revoked", 400: "Invalid request"}},
+		{Method: "POST", Path: "/oauth/revoke/token", Summary: "Revoke one of the caller's own OAuth2 tokens by id", Tags: []string{"OAuth"}, Auth: "required", StatusCodes: map[int]string{200: "Token revoked", 401: "Unauthorized"}},
 		{Method: "POST", Path: "/oauth/device/code", Summary: "Device flow — generate user & device codes", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Device code response", 400: "Invalid request"}},
 		{Method: "POST", Path: "/oauth/device/token", Summary: "Device flow — poll for access token", Tags: []string{"OAuth"}, Auth: "none", StatusCodes: map[int]string{200: "Token response", 400: "authorization_pending"}},
 	}
@@ -88,10 +100,13 @@ func registerOpenAPIRoutes() {
 // RegisterRoutes wires all OAuth route handlers at the app level.
 func RegisterRoutes(app *fiber.App) {
 	oauthGroup := app.Group("/oauth")
+	oauthGroup.Get("/applications", auth.AuthRequired(), handleListApplications)
 	oauthGroup.Post("/applications", handleCreateApplication)
+	oauthGroup.Delete("/applications/:id", auth.AuthRequired(), handleDeleteApplication)
 	oauthGroup.Get("/authorize", handleAuthorize)
 	oauthGroup.Post("/token", handleToken)
 	oauthGroup.Post("/revoke", handleRevoke)
+	oauthGroup.Post("/revoke/token", auth.AuthRequired(), handleRevokeForUser)
 
 	device := oauthGroup.Group("/device")
 	device.Post("/code", handleDeviceCode)
@@ -112,15 +127,25 @@ func generateRandomBytes(n int) ([]byte, error) {
 }
 
 func generateToken(length int) (string, error) {
+	return generatePrefixedToken("", length)
+}
+
+// generatePrefixedToken mints a random token with a recognisable prefix.
+func generatePrefixedToken(prefix string, length int) (string, error) {
 	b, err := generateRandomBytes(length)
 	if err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(b), nil
+	return prefix + hex.EncodeToString(b), nil
 }
 
+// generateUserCode mints an XXXX-XXXX device code.
+//
+// Each half is drawn from its own bytes: using one four-byte draw for both made
+// the second half a copy of the first, halving the code's entropy to 20 bits and
+// printing the same four characters twice (issue #124).
 func generateUserCode() (string, error) {
-	b, err := generateRandomBytes(4)
+	b, err := generateRandomBytes(8)
 	if err != nil {
 		return "", err
 	}
@@ -130,7 +155,7 @@ func generateUserCode() (string, error) {
 	}
 	code[4] = '-'
 	for i := 0; i < 4; i++ {
-		code[5+i] = userCodeCharset[int(b[i])%len(userCodeCharset)]
+		code[5+i] = userCodeCharset[int(b[4+i])%len(userCodeCharset)]
 	}
 	return string(code), nil
 }
@@ -152,29 +177,6 @@ func verifyPKCE(codeVerifier, codeChallenge string) bool {
 	h := sha256.Sum256([]byte(codeVerifier))
 	encoded := base64.RawURLEncoding.EncodeToString(h[:])
 	return subtle.ConstantTimeCompare([]byte(encoded), []byte(codeChallenge)) == 1
-}
-
-func validateScopes(requested []string) []string {
-	if len(requested) == 0 {
-		return defaultScopes
-	}
-	seen := make(map[string]bool)
-	var result []string
-	for _, s := range requested {
-		s = strings.TrimSpace(s)
-		if validScopes[s] && !seen[s] {
-			seen[s] = true
-			result = append(result, s)
-		}
-	}
-	if len(result) == 0 {
-		return defaultScopes
-	}
-	return result
-}
-
-func scopeString(scopes []string) string {
-	return strings.Join(scopes, " ")
 }
 
 func requireAuth(c *fiber.Ctx) (string, error) {
@@ -293,6 +295,16 @@ func handleAuthorize(c *fiber.Ctx) error {
 			return oauthBadRequest(c, "invalid client_id")
 		}
 		return fiber.NewError(fiber.StatusInternalServerError, "database error")
+	}
+
+	// Consent first: nothing is issued until the owner has seen what is being
+	// asked for and said yes.
+	if handled, err := consentGate(c, client, authorizeRequest{
+		ResponseType: responseType, ClientID: clientID, RedirectURI: redirectURI,
+		Scope: scope, State: state, CodeChallenge: codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
+	}); handled {
+		return err
 	}
 
 	validURI := false
@@ -512,12 +524,12 @@ func issueTokens(c *fiber.Ctx, db *gorm.DB, clientID, userID string, grantID *st
 		family = *grantID
 	}
 
-	accessToken, err := generateToken(accessTokenLength)
+	accessToken, err := generatePrefixedToken(accessTokenPrefix, accessTokenLength)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate access token")
 	}
 
-	refreshToken, err := generateToken(refreshTokenLength)
+	refreshToken, err := generatePrefixedToken(refreshTokenPrefix, refreshTokenLength)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate refresh token")
 	}

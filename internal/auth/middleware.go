@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"strings"
 
@@ -132,6 +134,16 @@ func extractAuth(c *fiber.Ctx) (string, string, error) {
 			return "", "", errInvalidToken
 		}
 		return userID, "apikey", nil
+	case strings.HasPrefix(token, OAuthTokenPrefix):
+		// OAuth access token — an opaque row issued by /oauth/token. Until this
+		// case existed a token could be minted and then be unusable: it matched
+		// no prefix, so every call with one was rejected.
+		userID, err := verifyOAuthToken(token)
+		if err != nil {
+			slog.Debug("oauth token verification failed", "path", c.Path(), "error", err)
+			return "", "", errInvalidToken
+		}
+		return userID, "oauth", nil
 	case strings.HasPrefix(token, SessionTokenPrefix):
 		// Local session path — an opaque server-side session row (issue #53).
 		// Gated on the mode: in clerk mode a local session token is not a
@@ -144,6 +156,26 @@ func extractAuth(c *fiber.Ctx) (string, string, error) {
 	default:
 		return "", "", errUnsupportedPrefix
 	}
+}
+
+// OAuthTokenPrefix marks an OAuth2 access token issued by this instance.
+const OAuthTokenPrefix = "hoa_"
+
+// verifyOAuthToken resolves an OAuth access token to its account.
+//
+// The token is matched by hash against oauth_tokens, so a revoked or expired
+// row stops working the moment it is marked — no separate cache to invalidate.
+func verifyOAuthToken(token string) (string, error) {
+	db, err := database.GetDB()
+	if err != nil {
+		return "", errInvalidToken
+	}
+	sum := sha256.Sum256([]byte(token))
+	resolved, err := database.ResolveOAuthAccessToken(db, hex.EncodeToString(sum[:]))
+	if err != nil {
+		return "", errInvalidToken
+	}
+	return resolved.UserID, nil
 }
 
 // verifyLocalSession resolves an opaque local session token to its user id.
