@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { MoreHorizontal } from 'lucide-react'
 import { useAuth } from '@/auth/context'
 import { Dropdown } from '@/components/ui'
@@ -14,15 +14,16 @@ import { MOBILE_BAR, MOBILE_MORE, mobileBarLabel } from './nav-items'
  * how Lists became unreachable on a phone while the sidebar had it.
  */
 export function MobileNav() {
-  const navigate = useNavigate()
   const { isAdmin } = useAuth()
 
+  // `to` renders each overflow destination as a link; without it the rows are
+  // buttons and the destinations cannot be opened in a new tab.
   const moreItems = MOBILE_MORE.filter(
     (item) => !item.adminOnly || isAdmin
   ).map((item) => ({
     label: item.label,
     icon: <item.icon className="size-4" />,
-    onSelect: () => navigate({ to: item.to }),
+    to: item.to,
   }))
 
   return (
