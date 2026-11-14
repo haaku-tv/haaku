@@ -116,23 +116,35 @@ func peopleForTitles(db *gorm.DB, kind string, ids []int64, perTitle int) (map[i
 	}
 	var credits []database.Credit
 	if err := db.Where("media_type = ? AND media_id IN ?", kind, ids).
-		Order("media_id ASC, credit_type ASC, \"order\" ASC").
+		Order("media_id ASC, \"order\" ASC").
 		Find(&credits).Error; err != nil {
 		return nil, err
 	}
+
+	// Crew first, then cast — the same policy leadPeople uses for the seed.
+	// Filling the per-title cap from whichever credit sorted first would let a
+	// six-billed cast push out the director, and a title sharing the seed's
+	// director would then lose that signal.
+	add := func(mediaID int64, personID int64) {
+		if personID == 0 || len(result[mediaID]) >= perTitle {
+			return
+		}
+		result[mediaID] = append(result[mediaID], personID)
+	}
 	for _, credit := range credits {
-		bucket := result[credit.MediaID]
-		if len(bucket) >= perTitle {
+		if credit.CreditType != "crew" {
 			continue
 		}
-		if credit.CreditType == "crew" {
-			switch credit.Job {
-			case "Director", "Creator", "Writer", "Screenplay":
-			default:
-				continue
-			}
+		switch credit.Job {
+		case "Director", "Creator", "Writer", "Screenplay":
+			add(credit.MediaID, credit.PersonID)
 		}
-		result[credit.MediaID] = append(bucket, credit.PersonID)
+	}
+	for _, credit := range credits {
+		if credit.CreditType != "cast" {
+			continue
+		}
+		add(credit.MediaID, credit.PersonID)
 	}
 	return result, nil
 }
@@ -185,6 +197,14 @@ func candidateRows(db *gorm.DB, kind string, profile *Profile, excludeID int64) 
 	}
 	if excludeID > 0 {
 		query = query.Where("id <> ?", excludeID)
+	}
+	// The seen set is excluded in SQL, not only in Go: with the filter applied
+	// after LIMIT, an account that has already dealt with the whole matched pool
+	// would come back empty and be reported as a cold start. GORM renders an
+	// empty slice as NULL in NOT IN, which matches nothing — hence the length
+	// guard rather than an unconditional clause.
+	if seen := profile.seenIDs(); len(seen) > 0 {
+		query = query.Where("id NOT IN ?", seen)
 	}
 
 	var rows []mediaRow

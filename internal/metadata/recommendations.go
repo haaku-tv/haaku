@@ -48,7 +48,12 @@ func (r *Resolver) ProviderRecommendations(ctx context.Context, seeds []Recommen
 		if seed.TmdbID <= 0 || r == nil || r.TMDB == nil {
 			continue
 		}
-		ids, err := r.providerRelated(seed.Kind, seed.TmdbID)
+		// A cancelled request should not keep walking seeds: five sequential
+		// provider timeouts would hold the response open for a minute.
+		if ctx.Err() != nil {
+			break
+		}
+		ids, err := r.providerRelated(ctx, seed.Kind, seed.TmdbID)
 		if err != nil {
 			slog.Debug("[recommend] provider related failed",
 				"kind", seed.Kind, "tmdb_id", seed.TmdbID, "error", err)
@@ -87,9 +92,9 @@ func (r *Resolver) ProviderRecommendations(ctx context.Context, seeds []Recommen
 }
 
 // providerRelated asks TMDB for one title's related list.
-func (r *Resolver) providerRelated(kind string, tmdbID int) ([]int, error) {
+func (r *Resolver) providerRelated(ctx context.Context, kind string, tmdbID int) ([]int, error) {
 	if kind == "show" {
-		resp, err := r.TMDB.GetShowRecommendations(tmdbID, 1)
+		resp, err := r.TMDB.GetShowRecommendationsContext(ctx, tmdbID, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +105,7 @@ func (r *Resolver) providerRelated(kind string, tmdbID int) ([]int, error) {
 		return ids, nil
 	}
 
-	resp, err := r.TMDB.GetMovieRecommendations(tmdbID, 1)
+	resp, err := r.TMDB.GetMovieRecommendationsContext(ctx, tmdbID, 1)
 	if err != nil {
 		return nil, err
 	}

@@ -227,3 +227,112 @@ func TestDismissingRejectsANonNumericId(t *testing.T) {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+// TestPersonalizedGenreFilterRunsBeforeThePageWindow pins the case a page-sized
+// filter gets wrong: the top-ranked titles are all dramas, so a Comedy request
+// must still find the comedies further down the ranking, and the count must
+// describe the matching set rather than the prefix that was fetched.
+func TestPersonalizedGenreFilterRunsBeforeThePageWindow(t *testing.T) {
+	db := setupRecDB(t)
+	now := time.Now().UTC()
+
+	mk := func(title, genre string, popularity int) {
+		m := database.Movie{
+			Title: title, Genres: database.StringSlice{genre},
+			RatingAvg: 7, RatingCount: 100, Popularity: float64(popularity),
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err := db.Create(&m).Error; err != nil {
+			t.Fatalf("seed %s: %v", title, err)
+		}
+	}
+	// Dramas outrank every comedy, so an unfiltered prefix is all drama.
+	mk("Drama One", "Drama", 500)
+	mk("Drama Two", "Drama", 480)
+	mk("Drama Three", "Drama", 460)
+	mk("Comedy One", "Comedy", 100)
+	mk("Comedy Two", "Comedy", 90)
+
+	app := recApp("local_genre")
+	for _, tc := range []struct {
+		page int
+		want string
+	}{
+		{1, "Comedy One"},
+		{2, "Comedy Two"},
+	} {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet,
+			fmt.Sprintf("/v1/recommendations/movies?genre=Comedy&limit=1&page=%d", tc.page), nil))
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		var body struct {
+			Items    []recMovieItem `json:"items"`
+			RowCount int            `json:"row_count"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			_ = resp.Body.Close()
+			t.Fatalf("decode: %v", err)
+		}
+		_ = resp.Body.Close()
+
+		if len(body.Items) != 1 || body.Items[0].Title != tc.want {
+			t.Fatalf("page %d = %+v, want [%s]", tc.page, body.Items, tc.want)
+		}
+		if body.RowCount != 2 {
+			t.Fatalf("page %d row_count = %d, want 2 (every matching title, not the page)", tc.page, body.RowCount)
+		}
+	}
+}
+
+// TestPersonalizedPagesDoNotRepeat pins that page 2 is page 2.
+func TestPersonalizedPagesDoNotRepeat(t *testing.T) {
+	db := setupRecDB(t)
+	now := time.Now().UTC()
+	for i, title := range []string{"One", "Two", "Three"} {
+		m := database.Movie{
+			Title: title, Genres: database.StringSlice{"Action"},
+			RatingAvg: 7, RatingCount: 50, Popularity: float64(100 - i*10),
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err := db.Create(&m).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	app := recApp("local_pages")
+	titles := func(page int) []string {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet,
+			fmt.Sprintf("/v1/recommendations/movies?limit=2&page=%d", page), nil))
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var body struct {
+			Items []recMovieItem `json:"items"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		out := make([]string, 0, len(body.Items))
+		for _, item := range body.Items {
+			out = append(out, item.Title)
+		}
+		return out
+	}
+
+	first, second := titles(1), titles(2)
+	if len(first) != 2 {
+		t.Fatalf("page 1 = %v, want two titles", first)
+	}
+	if len(second) != 1 || second[0] != "Three" {
+		t.Fatalf("page 2 = %v, want [Three] — the leftover title, not a repeat", second)
+	}
+	for _, title := range second {
+		for _, seen := range first {
+			if title == seen {
+				t.Fatalf("%q appears on both pages", title)
+			}
+		}
+	}
+}

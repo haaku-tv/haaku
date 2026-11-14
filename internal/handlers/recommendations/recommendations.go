@@ -165,6 +165,15 @@ type anticipatedItem struct {
 // Personalized recommendations
 // ---------------------------------------------------------------------------
 
+// candidatePool is the smallest number of ranked candidates a page request asks
+// the engine for, and maxCandidatePool the largest. The pool exists so the genre
+// filter runs over more than one page's worth of titles; the cap keeps a deep
+// page from materialising the catalogue.
+const (
+	candidatePool    = 200
+	maxCandidatePool = 500
+)
+
 // handlePersonalizedMovies serves GET /v1/recommendations/movies.
 func handlePersonalizedMovies(c *fiber.Ctx) error {
 	return personalized(c, "movie")
@@ -200,7 +209,19 @@ func personalized(c *fiber.Ctx, kind string) error {
 	// collaborative engine cannot serve. The catalogue engine then fills the row
 	// from this instance's own taste, and supplies everything when no token is
 	// configured.
-	items, personalised, err := recommendationsFor(c, db, userID, kind, page*limit)
+	// Enough candidates to fill the requested page AFTER the genre filter has
+	// run: filtering a page-sized slice first would answer "no comedies" when
+	// the first twenty ranked titles all happen to be dramas. The pool is
+	// bounded so a deep page cannot ask the engine for the whole catalogue.
+	pool := page * limit
+	if pool < candidatePool {
+		pool = candidatePool
+	}
+	if pool > maxCandidatePool {
+		pool = maxCandidatePool
+	}
+
+	items, personalised, err := recommendationsFor(c, db, userID, kind, pool)
 	if err != nil {
 		return response.InternalError(c)
 	}
@@ -217,11 +238,12 @@ func personalized(c *fiber.Ctx, kind string) error {
 		if err := db.Where("id IN ?", ids).Find(&shows).Error; err != nil {
 			return response.InternalError(c)
 		}
+		rendered, total := showPage(shows, ranked, genreFilter, page, limit)
 		return c.JSON(fiber.Map{
-			"items":        buildShowItems(shows, ranked, genreFilter),
+			"items":        rendered,
 			"page":         page,
 			"limit":        limit,
-			"row_count":    len(items),
+			"row_count":    total,
 			"personalised": personalised,
 		})
 	}
@@ -231,11 +253,12 @@ func personalized(c *fiber.Ctx, kind string) error {
 		return response.InternalError(c)
 	}
 
+	rendered, total := moviePage(movies, ranked, genreFilter, page, limit)
 	return c.JSON(fiber.Map{
-		"items":        buildMovieItems(movies, ranked, genreFilter),
+		"items":        rendered,
 		"page":         page,
 		"limit":        limit,
-		"row_count":    len(items),
+		"row_count":    total,
 		"personalised": personalised,
 	})
 }

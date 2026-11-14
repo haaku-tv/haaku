@@ -108,15 +108,26 @@ func recommendationsFor(c *fiber.Ctx, db *gorm.DB, userID, kind string, limit in
 	return items, personalised || len(items) > 0, nil
 }
 
-// buildMovieItems renders the ranked movies in score order, dropping the ones a
-// genre filter excludes and the rows past the requested page.
-func buildMovieItems(rows []database.Movie, ranked map[int64]int, genreFilter string) []recMovieItem {
+// moviePage renders one page of ranked movies.
+//
+// The genre filter runs before the page window — a matching title ranked 21st
+// still belongs on page one of a Comedy request — and the count it returns is
+// the size of the filtered set, so `row_count` stays constant across pages
+// instead of reporting the size of the prefix this call happened to fetch.
+func moviePage(rows []database.Movie, ranked map[int64]int, genreFilter string, page, limit int) ([]recMovieItem, int) {
 	ordered := orderMovies(rows, ranked)
-	results := make([]recMovieItem, 0, len(ordered))
+	matching := make([]database.Movie, 0, len(ordered))
 	for _, m := range ordered {
-		if !matchesGenre(m.Genres, genreFilter) {
-			continue
+		if matchesGenre(m.Genres, genreFilter) {
+			matching = append(matching, m)
 		}
+	}
+
+	total := len(matching)
+	matching = pageWindow(matching, page, limit)
+
+	results := make([]recMovieItem, 0, len(matching))
+	for _, m := range matching {
 		results = append(results, recMovieItem{
 			ID:         m.ID,
 			TmdbID:     m.TmdbID,
@@ -130,17 +141,24 @@ func buildMovieItems(rows []database.Movie, ranked map[int64]int, genreFilter st
 			Poster:     m.Images.StringValue("poster"),
 		})
 	}
-	return results
+	return results, total
 }
 
-// buildShowItems is buildMovieItems for shows.
-func buildShowItems(rows []database.Show, ranked map[int64]int, genreFilter string) []recShowItem {
+// showPage is moviePage for shows.
+func showPage(rows []database.Show, ranked map[int64]int, genreFilter string, page, limit int) ([]recShowItem, int) {
 	ordered := orderShows(rows, ranked)
-	results := make([]recShowItem, 0, len(ordered))
+	matching := make([]database.Show, 0, len(ordered))
 	for _, s := range ordered {
-		if !matchesGenre(s.Genres, genreFilter) {
-			continue
+		if matchesGenre(s.Genres, genreFilter) {
+			matching = append(matching, s)
 		}
+	}
+
+	total := len(matching)
+	matching = pageWindow(matching, page, limit)
+
+	results := make([]recShowItem, 0, len(matching))
+	for _, s := range matching {
 		results = append(results, recShowItem{
 			ID:           s.ID,
 			TmdbID:       s.TmdbID,
@@ -155,7 +173,23 @@ func buildShowItems(rows []database.Show, ranked map[int64]int, genreFilter stri
 			Poster:       s.Images.StringValue("poster"),
 		})
 	}
-	return results
+	return results, total
+}
+
+// pageWindow slices one page out of the filtered set.
+func pageWindow[T any](rows []T, page, limit int) []T {
+	if limit <= 0 {
+		return rows
+	}
+	start := (page - 1) * limit
+	if start >= len(rows) {
+		return nil
+	}
+	end := start + limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return rows[start:end]
 }
 
 func orderMovies(rows []database.Movie, ranked map[int64]int) []database.Movie {

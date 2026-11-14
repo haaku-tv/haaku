@@ -93,6 +93,20 @@ func (p *Profile) markSeen(id int64) {
 	}
 }
 
+// seenIDs returns the ids to exclude in SQL. Sorted so the same request always
+// builds the same statement.
+func (p *Profile) seenIDs() []int64 {
+	if len(p.seen) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(p.seen))
+	for id := range p.seen {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
 func (p *Profile) hasSeen(id int64) bool {
 	_, ok := p.seen[id]
 	return ok
@@ -298,6 +312,9 @@ func popular(db *gorm.DB, kind string, profile *Profile, limit int) ([]Item, boo
 	query := db.Model(&database.Movie{}).Select("id, popularity")
 	if kind == "show" {
 		query = db.Model(&database.Show{}).Select("id, popularity")
+	}
+	if seen := profile.seenIDs(); len(seen) > 0 {
+		query = query.Where("id NOT IN ?", seen)
 	}
 	var rows []mediaRow
 	if err := query.Order("popularity DESC").Order("id ASC").Limit(poolSize).Scan(&rows).Error; err != nil {
