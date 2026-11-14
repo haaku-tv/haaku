@@ -4,7 +4,7 @@
  * Handles base URL, JSON parsing, and error normalization.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/'
+import { apiURL } from '@/api/url'
 
 export class ApiError extends Error {
   status: number
@@ -29,18 +29,7 @@ async function request<T>(
 ): Promise<T> {
   const { params, body, headers: extraHeaders, ...init } = options
 
-  // Build URL with query params
-  let url = `${BASE_URL}${path}`
-  if (params) {
-    const searchParams = new URLSearchParams()
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== '') {
-        searchParams.set(key, String(value))
-      }
-    }
-    const qs = searchParams.toString()
-    if (qs) url += `?${qs}`
-  }
+  const url = apiURL(path, params)
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

@@ -51,13 +51,20 @@ func RegisterRoutes(api fiber.Router) {
 // Types
 // ---------------------------------------------------------------------------
 
-// EpisodeDetailResponse is the full episode detail with embedded show and season.
+// EpisodeDetailResponse is the full episode detail with the show and the season
+// row embedded.
+//
+// The nested season is `season_detail`, NOT `season`: the contract's episode
+// object requires `season` to be the season NUMBER, and a struct field named
+// `season` here shadows the embedded integer (encoding/json promotes the outer
+// field), which turned a required integer into an object and broke every client
+// that reads it — the episode page rendered the object as text.
 type EpisodeDetailResponse struct {
 	media.EpisodeResponse `json:",inline"`
 
-	Show   *media.ShowResponse   `json:"show,omitempty"`
-	Season *media.SeasonResponse `json:"season"`
-	Stats  *EpisodeStatsResponse `json:"stats"`
+	Show         *media.ShowResponse   `json:"show,omitempty"`
+	SeasonDetail *media.SeasonResponse `json:"season_detail,omitempty"`
+	Stats        *EpisodeStatsResponse `json:"stats"`
 }
 
 // EpisodeStatsResponse holds public stats for an episode.
@@ -99,7 +106,7 @@ func handleGetEpisode(c *fiber.Ctx) error {
 	var season database.Season
 	if err := db.First(&season, episode.SeasonID).Error; err == nil {
 		sr := media.BuildSeasonResponse(&season)
-		resp.Season = &sr
+		resp.SeasonDetail = &sr
 	}
 
 	// Fetch show.

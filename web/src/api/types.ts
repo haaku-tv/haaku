@@ -25,8 +25,9 @@ export interface Ids {
   // takes ids (a TVDB-keyed media server reports tvdb ids), but it is no longer
   // the id a live search hit carries.
   tvdb?: string
-  // id is the canonical API field name; the media endpoints serialise
-  // `{id, slug, tmdb, imdb, tvdb}` and the hooks normalise it to `trakt`.
+  // id is the local row id under the name earlier responses used; the API
+  // serves the same number as `trakt`, the key the contract requires. Read it
+  // through lib/ids.ts#localRowID.
   id?: number
 }
 
@@ -66,6 +67,7 @@ export interface Movie {
   title: string
   year: number
   ids: Ids
+  tagline?: string
   // in_catalog is set by /v1/search: true when the row already exists locally.
   in_catalog?: boolean
   overview?: string
@@ -89,6 +91,7 @@ export interface Show {
   title: string
   year: number
   ids: Ids
+  tagline?: string
   // in_catalog is set by /v1/search: true when the row already exists locally.
   in_catalog?: boolean
   overview?: string
@@ -112,6 +115,9 @@ export interface Show {
   available_translations?: string[]
   genres?: string[]
   aired_episodes?: number
+  season_count?: number
+  episode_count?: number
+  last_aired?: string
   images?: ImageSet
 }
 

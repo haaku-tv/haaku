@@ -162,9 +162,9 @@ func TestGetEpisodeHandler(t *testing.T) {
 			ShowID        int64  `json:"show_id"`
 			EpisodeNumber int    `json:"episode_number"`
 			Title         string `json:"title"`
-			Season        *struct {
+			SeasonDetail  *struct {
 				SeasonNumber int `json:"season_number"`
-			} `json:"season"`
+			} `json:"season_detail"`
 			Show *struct {
 				Title string `json:"title"`
 			} `json:"show"`
@@ -178,8 +178,8 @@ func TestGetEpisodeHandler(t *testing.T) {
 		if body.Title != "The Empty Interface" {
 			t.Errorf("expected title, got %q", body.Title)
 		}
-		if body.Season == nil || body.Season.SeasonNumber != 1 {
-			t.Errorf("expected embedded season number 1, got %+v", body.Season)
+		if body.SeasonDetail == nil || body.SeasonDetail.SeasonNumber != 1 {
+			t.Errorf("expected embedded season number 1, got %+v", body.SeasonDetail)
 		}
 		if body.Show == nil || body.Show.Title != "Breaking Go" {
 			t.Errorf("expected embedded show, got %+v", body.Show)
