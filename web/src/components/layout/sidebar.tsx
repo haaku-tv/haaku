@@ -1,34 +1,18 @@
 import { Link } from '@tanstack/react-router'
-import {
-  Bookmark,
-  Calendar,
-  Clock,
-  Home,
-  List,
-  Search,
-  Settings,
-  Shield,
-  User,
-  Users,
-} from 'lucide-react'
 import { useAuth } from '@/auth/context'
 import { cn } from '@/lib/utils'
+import { NAV_ITEMS, SIDEBAR_PRIMARY } from './nav-items'
 
-const navItems = [
-  { to: '/', icon: Home, label: 'Home' },
-  { to: '/search', icon: Search, label: 'Search' },
-  { to: '/watchlist', icon: Bookmark, label: 'Watchlist' },
-  { to: '/history', icon: Clock, label: 'History' },
-  { to: '/lists', icon: List, label: 'Lists' },
-  { to: '/calendar', icon: Calendar, label: 'Calendar' },
-  { to: '/social', icon: Users, label: 'Social' },
-]
+// Both presentations of the navigation read the same list; see nav-items.ts.
+const navItems = SIDEBAR_PRIMARY.flatMap((to) => {
+  const item = NAV_ITEMS.find((entry) => entry.to === to)
+  return item ? [item] : []
+}).filter((item) => !item.adminOnly)
 
-const bottomItems = [
-  { to: '/profile', icon: User, label: 'Profile' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-]
-const adminItem = { to: '/admin', icon: Shield, label: 'Admin' } as const
+const bottomItems = NAV_ITEMS.filter(
+  (item) => item.to === '/profile' || item.to === '/settings'
+)
+const adminItems = NAV_ITEMS.filter((item) => item.adminOnly)
 
 export function Sidebar() {
   // Identity comes from the shared auth context — a Clerk account in clerk
@@ -77,7 +61,8 @@ export function Sidebar() {
           {bottomItems.map((item) => (
             <SidebarLink key={item.to} {...item} />
           ))}
-          {isAdmin && <SidebarLink {...adminItem} />}
+          {isAdmin &&
+            adminItems.map((item) => <SidebarLink key={item.to} {...item} />)}
         </div>
       </div>
     </aside>
