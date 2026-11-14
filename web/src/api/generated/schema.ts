@@ -28,11 +28,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List the caller's OAuth2 applications */
+        get: operations["_oauth_applications_GET"];
         put?: never;
         /** Register a new OAuth2 application */
         post: operations["_oauth_applications_POST"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/applications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an application and revoke its tokens */
+        delete: operations["_oauth_applications_id_DELETE"];
         options?: never;
         head?: never;
         patch?: never;
@@ -100,6 +118,23 @@ export interface paths {
         put?: never;
         /** Revoke an OAuth2 token */
         post: operations["_oauth_revoke_POST"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one of the caller's own OAuth2 tokens by id */
+        post: operations["_oauth_revoke_token_POST"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1845,7 +1880,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Get movies related to this one */
         get: operations["_v1_movies_id_related_GET"];
         put?: never;
         post?: never;
@@ -2151,7 +2186,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get movie recommendations */
+        /** Get movies like this one */
         get: operations["_v1_movies_recommendations_id_GET"];
         put?: never;
         post?: never;
@@ -2530,7 +2565,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Dismiss a movie from the recommendations */
         delete: operations["_v1_recommendations_movies_id_DELETE"];
         options?: never;
         head?: never;
@@ -2564,7 +2599,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Dismiss a show from the recommendations */
         delete: operations["_v1_recommendations_shows_id_DELETE"];
         options?: never;
         head?: never;
@@ -3123,7 +3158,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Get shows related to this one */
         get: operations["_v1_shows_id_related_GET"];
         put?: never;
         post?: never;
@@ -3837,7 +3872,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get show recommendations */
+        /** Get shows like this one */
         get: operations["_v1_shows_recommendations_id_GET"];
         put?: never;
         post?: never;
@@ -6746,6 +6781,87 @@ export interface operations {
             };
         };
     };
+    _oauth_applications_GET: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     _oauth_applications_POST: {
         parameters: {
             query?: never;
@@ -6772,6 +6888,87 @@ export interface operations {
                 };
             };
             /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _oauth_applications_id_DELETE: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -7096,6 +7293,91 @@ export interface operations {
                 };
             };
             /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unprocessable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    _oauth_revoke_token_POST: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Token revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -16883,7 +17165,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Related movies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16939,15 +17228,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18411,7 +18691,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description invalid request */
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18467,15 +18747,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented (requires recommendations engine) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20393,7 +20664,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20402,7 +20680,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20449,15 +20727,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20557,7 +20826,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20566,7 +20842,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20613,15 +20889,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23370,7 +23637,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Related shows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23426,15 +23700,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26878,7 +27143,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description invalid request */
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26934,15 +27199,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented (requires recommendations engine) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27024,7 +27280,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider cat (#69) */
+            /** @description Not implemented — Driven by streaming release dates, which are not stored (see /calendars/all/streaming). (#69) */
             501: {
                 headers: {
                     [name: string]: unknown;

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Globe, Puzzle, Shield, Trash2 } from 'lucide-react'
+import { KeyRound, Puzzle, ShieldCheck, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useApi } from '@/api/client'
@@ -27,171 +27,162 @@ export const Route = createFileRoute('/settings/integrations')({
   component: IntegrationsPage,
 })
 
+/**
+ * One registered OAuth application, as `GET /oauth/applications` returns it.
+ *
+ * The page used to render a hardcoded pair of imaginary clients — "Haaku Web"
+ * and "Haaku iOS" — because the endpoint it called only accepted POST and
+ * answered 405. Whatever this page lists is now what the account actually
+ * authorised.
+ */
+interface OAuthApplication {
+  id: string
+  name: string
+  redirect_uris: string[]
+  created_at: string
+  scopes: string[]
+  active_tokens: number
+  last_issued_at?: string
+  access_expires_at?: string
+}
+
 function IntegrationsPage() {
   const api = useApi()
   const queryClient = useQueryClient()
+  const [revokeId, setRevokeId] = useState<string | null>(null)
 
-  const { data: tokens } = useQuery({
-    queryKey: ['integrations'],
-    queryFn: async () => {
+  const {
+    data: applications,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['oauth', 'applications'],
+    queryFn: async (): Promise<OAuthApplication[]> => {
       if (!api) return []
-      try {
-        const res = await api.GET('/oauth/applications' as never)
-        return (res.data as unknown as unknown[]) ?? []
-      } catch {
-        return []
-      }
+      const res = await api.GET('/oauth/applications' as never)
+      const body = res.data as unknown as { items?: OAuthApplication[] }
+      return body?.items ?? []
     },
     enabled: !!api,
   })
 
-  const [revokeId, setRevokeId] = useState<string | null>(null)
+  const apps = applications ?? []
 
   const revokeMutation = useMutation({
-    mutationFn: async (tokenId: string) => {
+    mutationFn: async (applicationID: string) => {
       if (!api) throw new Error('Not authenticated')
-      await api.POST('/oauth/revoke', {
-        body: { token_id: tokenId },
-      } as never)
+      // Deleting the application revokes every token issued to it, which is what
+      // "revoke access" means for the reader: the app is gone, not just idle.
+      await api.DELETE(
+        '/oauth/applications/{id}' as never,
+        {
+          params: { path: { id: applicationID } },
+        } as never
+      )
     },
     onSuccess: () => {
-      toast.success('Integration revoked')
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      toast.success('Access revoked')
+      queryClient.invalidateQueries({ queryKey: ['oauth', 'applications'] })
       setRevokeId(null)
     },
-    onError: () => {
-      toast.error('Failed to revoke integration')
-    },
+    onError: () => toast.error('Failed to revoke access'),
   })
 
-  const connectedApps = [
-    {
-      id: 'haaku-web',
-      name: 'Haaku Web',
-      description: 'Official Haaku web application',
-      icon: Globe,
-      lastUsed: 'Now',
-      scopes: ['read', 'write'],
-    },
-    {
-      id: 'haaku-ios',
-      name: 'Haaku iOS',
-      description: 'Official Haaku iOS application',
-      icon: Shield,
-      lastUsed: '2 days ago',
-      scopes: ['read', 'write', 'sync'],
-    },
-  ]
+  const app = apps.find((item) => item.id === revokeId)
 
   return (
     <div className="space-y-6">
       <SectionHead
         title="Integrations"
-        eyebrow="Manage connected applications and tokens"
+        eyebrow="Applications you have authorised"
       />
 
       <Banner type="info" id="integrations-info">
-        Revoking access will immediately disconnect the application from your
-        account.
+        Revoking access deletes the application and every token it was issued.
+        It will need to be authorised again to reconnect.
       </Banner>
 
-      <div className="space-y-4">
-        {connectedApps.map((app) => (
-          <Card key={app.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-full bg-sf-panel-2">
-                    <app.icon className="size-5 text-sf-ink-muted" />
+      {isError ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-sm text-sf-ink-muted">
+              Could not load your applications. Try again in a moment.
+            </p>
+          </CardContent>
+        </Card>
+      ) : isLoading ? null : apps.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <Puzzle className="mx-auto size-8 text-sf-ink-hint" />
+            <p className="mt-2 text-sm text-sf-ink-muted">
+              No applications yet. Anything you authorise through the OAuth flow
+              will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {apps.map((application, appIndex) => (
+            <Card key={`${application.id}:${appIndex}`}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-sf-panel-2">
+                      <KeyRound className="size-5 text-sf-ink-muted" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">
+                        {application.name}
+                      </CardTitle>
+                      <CardDescription>
+                        {application.active_tokens > 0
+                          ? `Connected — ${application.active_tokens} active token${application.active_tokens === 1 ? '' : 's'}`
+                          : 'No active token; it will need to reconnect'}
+                      </CardDescription>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-base">{app.name}</CardTitle>
-                    <CardDescription>{app.description}</CardDescription>
-                  </div>
-                </div>
-                <Badge variant="secondary">Last used: {app.lastUsed}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-1.5">
-                {app.scopes.map((scope) => (
-                  <Badge key={scope} variant="secondary">
-                    {scope}
+                  <Badge variant="secondary">
+                    Added{' '}
+                    {new Date(application.created_at).toLocaleDateString()}
                   </Badge>
-                ))}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setRevokeId(app.id)}
-              >
-                <Trash2 className="size-3" />
-                Revoke Access
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
-
-      {tokens && (tokens as unknown[]).length > 0 && (
-        <div>
-          <SectionHead
-            title="OAuth Tokens"
-            eyebrow="Active OAuth tokens for third-party apps"
-          />
-          <div className="space-y-3">
-            {(tokens as Record<string, unknown>[]).map(
-              (token: Record<string, unknown>, i: number) => {
-                const id = (token.id as string) ?? `token-${i}`
-                const appName =
-                  (token.application as string) ??
-                  (token.name as string) ??
-                  'Unknown App'
-                const createdAt = (token.created_at as string) ?? ''
-                return (
-                  <Card key={id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base">{appName}</CardTitle>
-                        {createdAt && (
-                          <Badge variant="secondary">
-                            {new Date(createdAt).toLocaleDateString()}
-                          </Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardFooter>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => setRevokeId(id)}
-                      >
-                        <Trash2 className="size-3" />
-                        Revoke
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                )
-              }
-            )}
-          </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {(application.scopes && application.scopes.length > 0
+                    ? application.scopes
+                    : ['no scopes granted']
+                  ).map((scope, scopeIndex) => (
+                    <Badge
+                      key={`${application.id}:${scope}:${scopeIndex}`}
+                      variant="secondary"
+                    >
+                      {scope}
+                    </Badge>
+                  ))}
+                </div>
+                {application.last_issued_at && (
+                  <p className="flex items-center gap-1.5 text-xs text-sf-ink-hint">
+                    <ShieldCheck className="size-3.5" />
+                    Token issued{' '}
+                    {new Date(application.last_issued_at).toLocaleString()}
+                  </p>
+                )}
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setRevokeId(application.id)}
+                >
+                  <Trash2 className="size-3" />
+                  Revoke access
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       )}
-
-      {(!tokens || (tokens as unknown[]).length === 0) &&
-        connectedApps.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center">
-              <Puzzle className="mx-auto size-8 text-sf-ink-hint" />
-              <p className="mt-2 text-sm text-sf-ink-muted">
-                No connected applications yet. Third-party apps you authorize
-                will appear here.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
       <Dialog
         open={!!revokeId}
@@ -201,10 +192,11 @@ function IntegrationsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke Access</DialogTitle>
+            <DialogTitle>Revoke access</DialogTitle>
             <DialogDescription>
-              This application will immediately lose access to your account. You
-              may need to re-authorize it to use it again.
+              {app
+                ? `${app.name} will immediately lose access to your account, and its tokens are deleted.`
+                : 'This application will immediately lose access to your account.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -218,7 +210,7 @@ function IntegrationsPage() {
               loading={revokeMutation.isPending}
             >
               <Trash2 className="size-4" />
-              Revoke Access
+              Revoke access
             </Button>
           </DialogFooter>
         </DialogContent>
