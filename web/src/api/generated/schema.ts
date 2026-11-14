@@ -1845,7 +1845,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Get movies related to this one */
         get: operations["_v1_movies_id_related_GET"];
         put?: never;
         post?: never;
@@ -2151,7 +2151,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get movie recommendations */
+        /** Get movies like this one */
         get: operations["_v1_movies_recommendations_id_GET"];
         put?: never;
         post?: never;
@@ -2530,7 +2530,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Dismiss a movie from the recommendations */
         delete: operations["_v1_recommendations_movies_id_DELETE"];
         options?: never;
         head?: never;
@@ -2564,7 +2564,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Dismiss a show from the recommendations */
         delete: operations["_v1_recommendations_shows_id_DELETE"];
         options?: never;
         head?: never;
@@ -3123,7 +3123,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Parity stub — not implemented (item-to-item related/recommendation engine) */
+        /** Get shows related to this one */
         get: operations["_v1_shows_id_related_GET"];
         put?: never;
         post?: never;
@@ -3837,7 +3837,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get show recommendations */
+        /** Get shows like this one */
         get: operations["_v1_shows_recommendations_id_GET"];
         put?: never;
         post?: never;
@@ -15318,7 +15318,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Unliked */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16883,7 +16883,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Related movies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16939,15 +16946,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18411,7 +18409,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description invalid request */
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18467,15 +18465,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented (requires recommendations engine) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20393,7 +20382,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20402,7 +20398,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20449,15 +20445,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20557,7 +20544,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20566,7 +20560,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description unauthorized */
+            /** @description Unauthorized */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20613,15 +20607,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23370,7 +23355,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description invalid request */
+            /** @description Related shows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23426,15 +23418,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented — recommendations engine (issue #49) (#49) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26878,7 +26861,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description invalid request */
+            /** @description Invalid id */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26934,15 +26917,6 @@ export interface operations {
             };
             /** @description internal server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not implemented (requires recommendations engine) */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27024,7 +26998,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Not implemented — STOP (no honest source): TMDB has no dated streaming-release feed for shows — its watch-provider cat (#69) */
+            /** @description Not implemented — Driven by streaming release dates, which are not stored (see /calendars/all/streaming). (#69) */
             501: {
                 headers: {
                     [name: string]: unknown;

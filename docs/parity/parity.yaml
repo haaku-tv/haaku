@@ -652,7 +652,7 @@ sections:
   - trakt: DELETE /lists/{id}/like
     ours: DELETE /v1/lists/{id}/like
     status: implemented
-    rationale: Served at DELETE /v1/lists/{id}/like; the path shape matches the contract.
+    rationale: Served at DELETE /v1/lists/{id}/like; answers the contract's 204 with no body and really removes the caller's list_likes row, decrementing lists.like_count in the same transaction (handleUnlikeList). An unlike of a like that is not there is still a 204, as an idempotent DELETE should be. Asserted by TestUnlikeListAnswers204AndDeletesTheLike, which reads the row back.
   - trakt: DELETE /notes/{id}
     ours: DELETE /v1/notes/{id}
     status: implemented
@@ -842,7 +842,7 @@ sections:
   - trakt: GET /movies/updates/{start_date}
     ours: GET /v1/movies/updates/{start_date}
     status: implemented
-    rationale: Served at GET /v1/movies/updates/{start_date}; the path shape matches the contract.
+    rationale: Served at GET /v1/movies/updates/{start_date}; every item is the contract's item shape - an updated_at taken from the stored movies.updated_at the window filter selects on, plus the movie object (title and ids with trakt and slug) - paginated with X-Pagination-* headers (handleMovieUpdates). TestMovieUpdatesFeedServesTheContractItemShape validates the served body against this operation's item schema.
   - trakt: GET /movies/{id}
     ours: GET /v1/movies/{id}
     status: implemented

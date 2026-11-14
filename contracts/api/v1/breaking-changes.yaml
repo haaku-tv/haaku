@@ -47,3 +47,6 @@ acknowledged:
   - signature: "removed-status-code GET /v1/shows/recommendations/{id} 501"
     date: 2026-11-14
     reason: "Same as the movie row: the 501 placeholder became a working 200 with a ranked array of shows."
+  - signature: "removed-status-code DELETE /v1/lists/{id}/like 200"
+    date: 2026-11-14
+    reason: "Aligned with the Trakt contract, which declares 204 and no body for this delete: the handler used to answer 200 with a liked:false body of our own making. The unlike itself is unchanged (the caller's list_likes row is deleted and like_count decremented), so a client that switched on 200 only needs to treat 204 as success and stop reading a body that was never the contract's; no callable surface was removed."

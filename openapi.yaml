@@ -5677,7 +5677,7 @@ paths:
         delete:
             operationId: _v1_lists_id_like_DELETE
             responses:
-                "200":
+                "204":
                     description: Unliked
                 "400":
                     content:
