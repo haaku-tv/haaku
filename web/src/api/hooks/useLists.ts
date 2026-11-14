@@ -557,6 +557,23 @@ export function useSmartListItems(
 }
 
 // ─── Community Lists ─────────────────────────────────────
+
+/**
+ * rowsOf reads a list endpoint that answers either a bare array or an
+ * {items: [...]} envelope.
+ *
+ * /v1/lists/trending answers the envelope, so casting its body to an array made
+ * every caller iterate an object — the home page and the community lists page
+ * both crashed on `.map` with "is not a function".
+ */
+function rowsOf<T>(body: unknown): T[] {
+  if (Array.isArray(body)) return body as T[]
+  if (body && typeof body === 'object' && 'items' in body) {
+    const items = (body as { items?: unknown }).items
+    if (Array.isArray(items)) return items as T[]
+  }
+  return []
+}
 export function useTrendingLists(client: ApiClient | null) {
   return useQuery({
     queryKey: listKeys.trending(),
@@ -564,7 +581,7 @@ export function useTrendingLists(client: ApiClient | null) {
       const api = requireClient(client)
       const { data, error } = await api.GET('/v1/lists/trending')
       if (error) throw error
-      return (data as unknown as TrendingList[]) ?? []
+      return rowsOf<TrendingList>(data)
     },
     enabled: !!client,
   })
@@ -582,7 +599,7 @@ export function usePopularLists(
         params: { query: { period } },
       } as never)
       if (error) throw error
-      return (data as unknown as PopularList[]) ?? []
+      return rowsOf<PopularList>(data)
     },
     enabled: !!client,
   })
